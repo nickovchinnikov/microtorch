@@ -3,8 +3,8 @@ from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
 
-type Scalar = Union[int, float]
-type Data = Union[Scalar, list, np.ndarray, "Tensor"]
+Scalar = Union[int, float]
+Data = Union[Scalar, list, np.ndarray, "Tensor"]
 
 
 @dataclass(frozen=True)

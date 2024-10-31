@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import torch
 
-from src.au2grad.tensor import Tensor
+from src.tensor import Tensor
 
 
 class TestTensor(unittest.TestCase):
