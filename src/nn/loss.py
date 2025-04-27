@@ -26,21 +26,21 @@ class Loss(Module):
     def __init__(self, reduction: Literal["mean", "sum", "none"] = "mean"):
         self.reduction = reduction
 
-    def compute_loss(self, prediction: Tensor, target: Tensor) -> Tensor:
+    def compute_loss(self, pred: Tensor, target: Tensor) -> Tensor:
         r"""
         Compute loss function.
         """
         raise NotImplementedError
 
-    def forward(self, prediction: Tensor, target: Tensor) -> Tensor:
+    def forward(self, pred: Tensor, target: Tensor) -> Tensor:
         r"""
         Forward pass.
         Apply the reduction to the loss.
         """
         assert (
-            prediction.shape == target.shape
+            pred.shape == target.shape
         ), "Input and target must have the same shape"
-        loss = self.compute_loss(prediction, target)
+        loss = self.compute_loss(pred, target)
         return reduction_loss(loss, self.reduction)
 
 
@@ -74,7 +74,8 @@ class MSELoss(Loss):
         """
 
         return (prediction - target).pow(2)
-    
+
+
 class CrossEntropyLoss(Loss):
     def __init__(self):
         super().__init__(reduction="mean")    
@@ -97,3 +98,4 @@ class BCELoss(Loss):
         """
 
         return -(target * prediction.log() + (1 - target) * (1 - prediction).log())
+

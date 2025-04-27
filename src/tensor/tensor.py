@@ -31,7 +31,7 @@ class Tensor:
 
         if self.requires_grad:
             self.zero_grad()
-    
+
     @property
     def ndim(self) -> int:
         return self._data.ndim
