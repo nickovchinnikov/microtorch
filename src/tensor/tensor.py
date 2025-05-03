@@ -1,529 +1,520 @@
-from dataclasses import dataclass
-from typing import Callable, List, Optional, Tuple, Union
+import pickle
+from functools import wraps
+from pathlib import Path
+from typing import Optional, Tuple, Union
 
-import numpy as np
-
-Scalar = Union[int, float]
-Data = Union[Scalar, list, np.ndarray, "Tensor"]
-
-
-@dataclass(frozen=True)
-class Leaf:
-    value: "Tensor"
-    grad_fn: Callable[[np.ndarray], np.ndarray]
+from .device import Device, DType, Vector, _device, _tensor, get_dtype
+from .ops import BaseOps, Elementwise, MathOps, OverloadOps, Reduce
+from .types import Data, DependenciesList, TensorLike, TProps
 
 
-class Tensor:
+def data_cast(t: Union[Data, "Tensor"]) -> "Tensor":
+    if not isinstance(t, Tensor):
+        t = Tensor(t)
+    return t
+
+def data_gate(fn):
+    @wraps(fn)
+    def wrapper(self: Tensor, other: Union[Data, Tensor], *args, **kwargs):
+        other = data_cast(other)
+        return fn(self, other, *args, **kwargs)
+    return wrapper
+
+def device_gate(fn):
+    @wraps(fn)
+    def wrapper(self: Tensor, other: Tensor, *args, **kwargs):
+        if self.device != other.device:
+            raise ValueError(f"Tensors on different devices: {self.device} vs {other.device}")
+        return fn(self, other, *args, **kwargs)
+    return wrapper
+
+def input_gate(fn):
+    return data_gate(device_gate(fn))
+
+def from_op(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        props = fn(*args, **kwargs)
+        return Tensor.from_props(props)
+    return wrapper
+
+def op_gate(fn):
+    return input_gate(from_op(fn))
+
+
+
+class Tensor(TensorLike):
+    # Class attributes to quickly reference dtype enums
+    float64 = DType.FLOAT64
+    float32 = DType.FLOAT32
+    int64 = DType.INT64
+    int32 = DType.INT32
+    int16 = DType.INT16
+    int8 = DType.INT8
+
     def __init__(
         self,
         data: Data,
         requires_grad: bool = False,
-        dependencies: Optional[List[Leaf]] = [],
-        dtype=np.float32
+        dependencies: Optional[DependenciesList] = None,
+        device: Union[Device, str] = Device.CPU,
+        dtype: Optional[TensorLike] = None,
     ) -> None:
-        self._data = Tensor.build_ndarray(data, dtype)
-        self.dtype = self._data.dtype
+        self.device = _device(device)
+
+        # Ensure proper initialization of base classes 
+        self.dependencies: DependenciesList = dependencies or []
+        self.dtype = dtype or self.float32
+
+        self._data = self.build_ndarray(data, self.dtype, self.device)
 
         self.requires_grad = requires_grad
-        self.dependencies: List[Leaf] = dependencies
 
-        self.grad: np.ndarray = None
+        if self.requires_grad:
+            self.grad = _tensor(self.device).zeros_like(
+                self._data,
+                dtype=get_dtype(self.device, self.dtype),
+            )
+        else:
+            self.grad: Vector = None
 
         if self.requires_grad:
             self.zero_grad()
 
-    @property
-    def ndim(self) -> int:
-        return self._data.ndim
-    
-    @property
-    def shape(self) -> Tuple[int, ...]:
-        return self._data.shape
-    
-    @property
-    def size(self) -> int:
-        return self.data.size
+    @classmethod
+    def from_props(cls, prps: TProps) -> "Tensor":
+        return cls(*prps.props())
 
     @property
-    def data(self) -> np.ndarray:
-        """Return the data of the tensor"""
+    def data(self) -> Vector:
+        r"""Return the data of the tensor"""
         return self._data
-    
-    def zero_grad(self) -> None:
-        r"""
-        Zero the gradients of all parameters
-        """
-        if self.grad is None:
-            self.grad = np.zeros_like(self.data, dtype=float)
-        else:
-            self.grad.fill(0.0)
 
     @data.setter
     def data(self, new_data: Data) -> None:
-        """Set the data of the tensor"""
-        self._data = Tensor.build_ndarray(new_data)
+        r"""Set the data of the tensor"""
+        self._data = self.build_ndarray(new_data, self.dtype, self.device)
         self.zero_grad()
 
     @staticmethod
     def build_ndarray(
         data: Data,
-        dtype = np.float32
-    ) -> np.ndarray:
-        # TODO: You can use CUDA here to wrap instead of np cupy !
-        # Case of, data is a np.ndarray
-        if isinstance(data, np.ndarray):
-            # Ensure np.ndarray includes floats
-            types = (np.float32, np.float64, np.int16, np.int32)
-            if data.dtype in types:
-                return data
-            # Cast data
-            return data.astype(dtype)
-        # Case of, data is a tensor
+        dtype: DType = DType.FLOAT32,
+        device: Device = Device.CPU
+    ) -> Vector:
+        dtype_ = get_dtype(device, dtype)
+
         if isinstance(data, Tensor):
-            return np.array(data.data, dtype=dtype)
-        # Case of, data is a list, float or int
-        return np.array(data, dtype=dtype)
-    
-    @staticmethod
-    def data_gate(
-        data_object: Data,
-    ) -> "Tensor":
-        # Check if the other object has all the required attributes
-        required_attrs = [
-            "_data",
-            "shape",
-            "dtype",
-            "dependencies",
-            "requires_grad",
-            "grad",
-        ]
+            return data.data  # Ensure correct return value
 
-        if all(hasattr(data_object, attr) for attr in required_attrs):
-            return data_object
+        return _tensor(device).array(data, dtype=dtype_)
+
+    def to(self, device: Union[Device, str], dtype: DType = None) -> "Tensor":
+        new_device = _device(device)
+        new_dtype = dtype or self.dtype
+        new_dtype_impl = get_dtype(new_device, new_dtype)
+
+        # If no change is needed, return self
+        if new_device == self.device and new_dtype == self.dtype:
+            return self
+
+        # Handle device transfer
+        if new_device != self.device:
+            new_data = _tensor(new_device).array(
+                self.data, dtype=new_dtype_impl
+            )
         else:
-            return Tensor(data_object)
+            new_data = self.data
 
-    @staticmethod
-    def randn(dims: Tuple[int] | int = (), require_grad=False):
-        if type(dims) is int:
-            dims = (dims,)
-        return Tensor(np.random.randn(*dims), require_grad)
+        # Handle dtype conversion
+        if new_dtype != self.dtype:
+            new_data = new_data.astype(new_dtype_impl)
 
-    def __repr__(self) -> str:
-        return f"Tensor({self.data}, requires_grad={self.requires_grad}, shape={self.shape})"
+        return Tensor(
+            new_data,
+            requires_grad=self.requires_grad,
+            dependencies=self.dependencies,
+            device=new_device,
+            dtype=new_dtype
+        )
 
-    def backward(self, grad: Optional[np.ndarray] = None) -> None:
-        assert self.requires_grad, "Backward was called on a non-required-grad tensor"
+    def zero_grad(self) -> None:
+        r"""
+        Zero the gradients of all parameters
+        """
+
+        if self.grad is None:
+            self.grad = _tensor(self.device).zeros_like(
+                self._data,
+                dtype=get_dtype(self.device, self.dtype),
+            )
+        else:
+            self.grad.fill(0.0)
+
+    def release_grad(self) -> None:
+        r"""
+        Release gradient memory
+        """
+        self.grad = None
+
+    def backward(self, grad: Optional[Vector] = None) -> None:
+        if not self.requires_grad:
+            raise ValueError("Backward was called on a non-required-grad tensor!")
 
         if grad is None:
             if self.shape == ():
-                grad = Tensor.build_ndarray(1.0)
+                grad = self.build_ndarray(1.0, self.dtype, self.device)
             else:
-                raise ValueError("Grad must be provided if tensor has shape")
+                raise ValueError(f"Grad must be provided for non-scalar tensors. Tensor shape: {self.shape}")
 
-        self.grad = self.grad + grad
+        # Ensure `grad` has the correct shape
+        if grad.shape != self.shape:
+            raise ValueError(f"Grad shape {grad.shape} does not match tensor shape {self.shape}")
+
+        if grad.device != self.device:
+            raise ValueError(f"Grad device {grad.device} does not match tensor device {self.device}")
+
+        if self.grad is None:
+            self.grad = grad
+        else:
+            _tensor(self.device).add(self.grad, grad, out=self.grad)
 
         for dependency in self.dependencies:
             backward_grad = dependency.grad_fn(grad)
             dependency.value.backward(backward_grad)
 
-    def view(self, shape: Tuple[int, ...], stride: Tuple[int, ...] = None) -> "Tensor":
+    def clip_grad(self, clip_value: float = 1.0) -> None:
         r"""
-        Returns a new Tensor object with the same underlying data, but with a different shape.
-
-        Args:
-            shape (Tuple[int, ...]): The new shape of the Tensor.
-            stride (Tuple[int, ...]): The stride of the new Tensor.
-                If not specified, the stride will be calculated automatically.
-
-        Returns:
-            A new Tensor object with the same underlying data, but with the specified shape.
+        Clips the gradients of the tensor to a specified value.
         """
 
-        if stride is None:
-            stride = self.data.strides
-
-        output: np.ndarray = self.data.reshape(shape)
-        dependencies: List[Leaf] = []
-
-        if self.requires_grad:
-            def _bkwd(grad: np.ndarray) -> np.ndarray:
-                return grad.reshape(self.shape)
-
-            dependencies.append(Leaf(value=self, grad_fn=_bkwd))
-
-        return Tensor(output, self.requires_grad, dependencies, dtype=self.dtype)
-
-    def transpose(self, axes: Tuple[int, ...] = None) -> "Tensor":
-        output = np.transpose(self.data, axes=axes)
-        dependencies: List[Leaf] = []
-
-        def _bkwd(grad: np.ndarray) -> np.ndarray:
-            return np.transpose(grad, axes=axes)
-
-        if self.requires_grad:
-            dependencies.append(
-                Leaf(value=self, grad_fn=_bkwd)
+        if self.requires_grad and self.grad is not None:
+            self.grad = _tensor(self.device).clip(
+                self.grad,
+                -clip_value,
+                clip_value
             )
 
-        return Tensor(output, self.requires_grad, dependencies)
-    
+    def clip_grad_norm(
+        self,
+        max_norm: float = 1.0,
+        norm_type: float = 2.0,
+        eps: float = 1e-6
+    ) -> None:
+        r"""
+        Clips the gradients of the tensor to a specified norm.
+        """
+
+        if self.requires_grad and self.grad is not None:
+            grad_norm = _tensor(self.device).linalg.norm(self.grad, norm_type)
+            if grad_norm > max_norm:
+                self.grad = self.grad * (max_norm / (grad_norm + eps))
+
+    def save(self, file_path: Union[str, Path]) -> None:
+        r"""
+        Saves the tensor to a file.
+        """
+        state = {
+            'data': self.data,
+            'requires_grad': self.requires_grad,
+            'grad': self.grad,
+            'device': self.device.value,
+            'dtype': self.dtype.value,
+            # Leaf contains grad_fn, which is often non-picklable (lambdas, function pointers)
+            # Pickling will crash for non-trivial graphs
+            # Skip dependencies when saving/loading.
+            # 'dependencies': self.dependencies,
+        }
+
+        with open(file_path, 'wb') as f:
+            pickle.dump(state, f)
+
+    @classmethod
+    def load(cls, file_path: Union[str, Path]) -> "Tensor":
+        r"""
+        Loads a tensor from a file.
+        """
+
+        file_path = Path(file_path)
+
+        if not file_path.exists():
+            raise FileNotFoundError(f"No file found at {file_path}")
+
+        try:
+            with open(file_path, 'rb') as f:
+                state = pickle.load(f)
+        except (pickle.UnpicklingError, EOFError) as e:
+            raise ValueError(f"Invalid tensor file format at {file_path}") from e
+
+        if not isinstance(state, dict) or 'data' not in state:
+            raise ValueError(f"Invalid tensor file format at {file_path}")
+
+        device = Device(state['device'])
+        dtype = DType(state['dtype'])
+
+        tensor = cls(
+            data=state['data'],
+            requires_grad=state['requires_grad'],
+            device=device,
+            dtype=dtype,
+        )
+
+        tensor.grad = state['grad']
+        # Skip dependencies when saving/loading.
+        # tensor.dependencies = state['dependencies']
+
+        return tensor
+
+    def detach(self) -> "Tensor":
+        r"""
+        Returns a new tensor, detached from the current computational graph.
+        """
+        return Tensor(
+            self.data.copy(),
+            device=self.device,
+            requires_grad=False,
+            dtype=self.dtype,
+        )
+
+    def clone(self) -> "Tensor":
+        r"""
+        Returns a copy of the tensor with the same data and requires_grad flag.
+        """
+        return Tensor(
+            self.data.copy(),
+            device=self.device,
+            requires_grad=self.requires_grad,
+            dtype=self.dtype,
+            dependencies=(
+                self.dependencies.copy()
+                if self.dependencies
+                else None
+            ),
+        )
+
+    def copy(self) -> "Tensor":
+        r"""
+        Alias for clone().
+        """
+        return self.clone()
+
+    def __repr__(self) -> str:
+        return (
+            f"Tensor(data={self.data}, requires_grad={self.requires_grad}, shape={self.shape}, dtype={self.dtype}, device={self.device})"
+        )
+
+    @staticmethod
+    def randn(
+        dims: Tuple[int] | int = (),
+        requires_grad=False,
+        device: Device = Device.CPU,
+    ) -> "Tensor":
+        if type(dims) is int:
+            dims = (dims,)
+        return Tensor(
+            _tensor(device).random.randn(*dims),
+            requires_grad=requires_grad,
+            device=device,
+        )
+
+    def view(self, shape: Tuple[int, ...]) -> "Tensor":
+        return Tensor.from_props(BaseOps.view(self, shape))
+
+    def transpose(self, axis: Tuple[int, ...] = None) -> "Tensor":
+        return Tensor.from_props(BaseOps.transpose(self, axis))
+
     @property
     def T(self) -> "Tensor":
         return self.transpose()
-    
+
     def squeeze(self, dim: int | Tuple[int] = 0) -> "Tensor":
-        output = np.squeeze(self.data, axis=dim)
-        dependencies: List[Leaf] = []
+        return Tensor.from_props(BaseOps.squeeze(self, dim))
 
-        def _bkwd(grad: np.ndarray) -> np.ndarray:
-            return np.expand_dims(grad, axis=dim)
-
-        if self.requires_grad:
-            dependencies.append(
-                Leaf(value=self, grad_fn=_bkwd)
-            )
-
-        return Tensor(output, self.requires_grad, dependencies)
-    
     def unsqueeze(self, dim: Tuple[int] = 0) -> "Tensor":
-        output = np.expand_dims(self.data, axis=dim)
-        dependencies: List[Leaf] = []
+        return Tensor.from_props(BaseOps.unsqueeze(self, dim))
 
-        def _bkwd(grad: np.ndarray) -> np.ndarray:
-            return np.squeeze(grad, axis=dim)
+    ###########################################################################
+    ############################## Elementwise Ops ############################
+    ###########################################################################
 
-        if self.requires_grad:
-            dependencies.append(
-                Leaf(
-                    value=self,
-                    grad_fn=_bkwd
-                )
-            )
+    @staticmethod
+    def where(condition: "Tensor", a: "Tensor", b: "Tensor") -> "Tensor":
+        return Tensor.from_props(Elementwise.where(condition, a, b))
 
-        return Tensor(output, self.requires_grad, dependencies)
-    
-    def sum(self, axis: int = None, keepdims: bool = False) -> "Tensor":
-        output = self.data.sum(axis=axis, keepdims=keepdims)
-        dependencies: List[Leaf] = []
+    @staticmethod
+    @op_gate
+    def maximum(a: "Tensor", b: "Tensor") -> "Tensor":
+        return Elementwise.maximum(a, b)
 
-        def _bkwd(grad: np.ndarray) -> np.ndarray:
-            if keepdims:
-                expanded_grad = np.expand_dims(grad, axis=axis)
-                ones = np.ones_like(expanded_grad)
-                grad = expanded_grad * ones
-            return np.sum(grad, axis=axis)
-
-        if self.requires_grad:
-            dependencies.append(
-                Leaf(
-                    value=self,
-                    grad_fn=_bkwd
-                )
-            )
-
-        return Tensor(output, self.requires_grad, dependencies)
-    
-    def mean(self) -> "Tensor":
-        return self.sum() / self.size
+    @staticmethod
+    @op_gate
+    def minimum(a: "Tensor", b: "Tensor") -> "Tensor":
+        return Elementwise.minimum(a, b)
 
     def abs(self) -> "Tensor":
-        output = np.abs(self.data)
-        dependencies: List[Leaf] = []
+        return Tensor.from_props(Elementwise.abs(self))
 
-        def _bkwd(grad: np.ndarray) -> np.ndarray:
-            return grad * np.sign(self.data)
+    def threshold(self, threshold: float, value: float) -> "Tensor":
+        return Tensor.where(self > threshold, self, Tensor(value))
 
-        if self.requires_grad:
-            dependencies.append(
-                Leaf(
-                    value=self,
-                    grad_fn=_bkwd
-                )
-            )
+    @input_gate
+    def masked_fill(self, mask: "Tensor", value: float) -> "Tensor":
+        return Tensor.where(mask, Tensor(value), self)
 
-        return Tensor(output, self.requires_grad, dependencies)
-    
-    def log(self) -> "Tensor":
-        output = np.log(self.data)
-        dependencies: List[Leaf] = []
+    def sign(self) -> "Tensor":
+        return Tensor.where(
+            self > 0, Tensor(1),
+            Tensor.where(self < 0, Tensor(-1), Tensor(0))
+        )
 
-        def _bkwd(grad: np.ndarray) -> np.ndarray:
-            return grad / self.data
-
-        if self.requires_grad:
-            dependencies.append(
-                Leaf(
-                    value=self,
-                    grad_fn=_bkwd
-                )
-            )
-
-        return Tensor(output, self.requires_grad, dependencies)
-    
-    def tanh(self) -> "Tensor":
-        output = np.tanh(self.data)
-        dependencies: List[Leaf] = []
-
-        def _bkwd(grad: np.ndarray) -> np.ndarray:
-            return grad * (1 - output**2)
-
-        if self.requires_grad:
-            dependencies.append(
-                Leaf(
-                    value=self,
-                    grad_fn=_bkwd
-                )
-            )
-
-        return Tensor(output, self.requires_grad, dependencies)
-    
-    def pow(self, pow: Scalar) -> "Tensor":
-        # Perform power operation
-        output = self.data**pow
-        dependencies: List[Leaf] = []
-
-        def _bkwd(grad: np.ndarray) -> np.ndarray:
-            return grad * (pow * (self.data**(pow-1)))
-
-        if self.requires_grad:
-            dependencies.append(
-                Leaf(
-                    value=self,
-                    grad_fn=_bkwd
-                )
-            )
-
-        return Tensor(output, self.requires_grad, dependencies)
+    def clip(self, min_value: Optional[float] = None, max_value: Optional[float] = None) -> "Tensor":
+        return Tensor.where(
+            self < min_value, Tensor(min_value),
+            Tensor.where(self > max_value, Tensor(max_value), self)
+        )
 
     ###########################################################################
     ############################## Operator Overload ##########################
     ###########################################################################
-  
-    def __getitem__(self, index: Union["Tensor", np.ndarray]) -> "Tensor":
-        r"""
-        Tensor indexing operation.
 
-        Args:
-            index (Union["Tensor", np.ndarray]): The index to select from the tensor.
+    @data_gate
+    def __getitem__(self, index: Union[int, slice, Tuple[Union[int, slice]], "Tensor", Vector]) -> "Tensor":
+        return Tensor.from_props(
+            OverloadOps.get_item(self, index.data)
+        )
 
-        Returns:
-            Tensor: The selected tensor.
-        """
+    ### Comparison Operators ###
+    @data_gate
+    def __lt__(self, other: Data) -> "Tensor":
+        return Tensor(self.data < other.data)
 
-        index = Tensor.data_gate(index).data
-        output = self.data[index]
-        dependencies = []
+    @data_gate
+    def __gt__(self, other: Data) -> "Tensor":
+        return Tensor(self.data > other.data)
 
-        if self.requires_grad:
-            def _bkwd(grad):
-                r"""
-                Backward pass for tensor indexing.
-                """
-                full_grad = np.zeros_like(self.data)
-                full_grad[index] = grad
-                return full_grad
-            
-            dependencies.append(Leaf(value=self, grad_fn=_bkwd))
-            
-        return Tensor(output, self.requires_grad, dependencies)
-    
-    @staticmethod
-    def _bkwd_broadcast(tensor: "Tensor"):
-        r"""
-        Sum across dimensions for broadcast.
-        Backward closure function for grad.
-        """
+    @data_gate
+    def __eq__(self, other: Data) -> "Tensor":
+        return Tensor(self.data == other.data)
 
-        def _bkwd(grad: np.ndarray) -> np.ndarray:
-            dimensions = grad.ndim - tensor.ndim
-            # Sum across broadcasted dimensions
-            for _ in range(dimensions):
-                grad = grad.sum(axis=0, keepdims=True)
-            # Sum across singleton dimensions
-            for index, dimension in enumerate(tensor.shape):
-                if dimension == 1:
-                    grad = grad.sum(axis=index, keepdims=True)
-            return grad
+    @data_gate
+    def __le__(self, other: Data) -> "Tensor":
+        return Tensor(self.data <= other.data)
 
-        return _bkwd
+    @data_gate
+    def __ge__(self, other: Data) -> "Tensor":
+        return Tensor(self.data >= other.data)
 
-    @staticmethod
-    def _add(a: "Tensor", b: "Tensor") -> "Tensor":
-        output = a.data + b.data
-        requires_grad = a.requires_grad or b.requires_grad
-        dependencies: List[Leaf] = []
+    @data_gate
+    def __ne__(self, other: Data) -> "Tensor":
+        return Tensor(self.data != other.data)
 
-        if a.requires_grad:
-            dependencies.append(
-                Leaf(value=a, grad_fn=Tensor._bkwd_broadcast(a))
-            )
-
-        if b.requires_grad:
-            dependencies.append(
-                Leaf(value=b, grad_fn=Tensor._bkwd_broadcast(b))
-            )
-
-        return Tensor(output, requires_grad, dependencies)
-
+    ### Math Operators ###
+    @op_gate
     def __add__(self, other: Data) -> "Tensor":
-        return Tensor._add(self, Tensor.data_gate(other))
-    
-    def __radd__(self, other: Data) -> "Tensor":
-        return Tensor._add(Tensor.data_gate(other), self)
-    
-    def __iadd__(self, other: Data) -> "Tensor":
-        r"""
-        In-place addition self: += other
-        There is no gradient function for in-place operations!
-        """
-        self.data = self.data + Tensor.build_ndarray(other)
-        return self
-    
-    def __sub__(self, other: Data) -> "Tensor":
-        return self + (-Tensor.data_gate(other))
+        return OverloadOps.add(self, other)
 
+    @op_gate
+    def __radd__(self, other: Data) -> "Tensor":
+        return OverloadOps.add(other, self)
+
+    def __iadd__(self, other: Data) -> "Tensor":
+        other = Tensor.build_ndarray(other)
+        _tensor(self.device).add(self.data, other, out=self.data)
+        return self
+
+    def __neg__(self) -> "Tensor":
+        return Tensor.from_props(OverloadOps.neg(self))
+
+    @input_gate
+    def __sub__(self, other: Data) -> "Tensor":
+        return self + (-other)
+
+    @input_gate
     def __rsub__(self, other: Data) -> "Tensor":
-        return Tensor.data_gate(other) + (-self)
-    
+        return other + (-self)
+
     def __isub__(self, other: Data) -> "Tensor":
         r"""
         In-place subtraction self: -= other
         There is no gradient function for in-place operations!
         """
-        self.data = self.data - Tensor.build_ndarray(other)
+        other = -Tensor.build_ndarray(other)
+        _tensor(self.device).add(self.data, other, out=self.data)
         return self
-    
-    def __neg__(self) -> "Tensor":
-        output = -self.data
-        dependencies: List[Leaf] = []
 
-        if self.requires_grad:
-            dependencies.append(
-                Leaf(value=self, grad_fn=lambda grad: -grad)
-            )
-
-        return Tensor(output, self.requires_grad, dependencies)
-    
-    @staticmethod
-    def mul(a: "Tensor", b: "Tensor") -> "Tensor":
-        a = Tensor.data_gate(a)
-        b = Tensor.data_gate(b)
-
-        output = a.data * b.data
-        requires_grad = a.requires_grad or b.requires_grad
-        dependencies: List[Leaf] = []
-
-        def _backward(a: Tensor, b: Tensor):
-            r"""
-            Backward closure function for Mul.
-            """
-
-            def _bkwd(grad: np.ndarray) -> np.ndarray:
-                r"""
-                Backward gradient function for Mul.
-                """
-
-                # Multiply grad by tensor b data
-                grad = grad * b.data
-                # Reduce grad to the correct shape
-                return Tensor._bkwd_broadcast(a)(grad)
-
-            return _bkwd
-
-        if a.requires_grad:
-            dependencies.append(
-                Leaf(
-                    value=a,
-                    grad_fn=_backward(a, b)
-                )
-            )
-
-        if b.requires_grad:
-            dependencies.append(
-                Leaf(
-                    value=b,
-                    grad_fn=_backward(b, a)
-                )
-            )
-
-        return Tensor(output, requires_grad, dependencies)
-
+    @op_gate
     def __mul__(self, other: Data) -> "Tensor":
-        return Tensor.mul(self, Tensor.data_gate(other))
-    
+        return OverloadOps.mul(self, other)
+
+    @op_gate
     def __rmul__(self, other: Data) -> "Tensor":
-        return Tensor.mul(Tensor.data_gate(other), self)
-    
+        return OverloadOps.mul(other, self)
+
     def __imul__(self, other: Data) -> "Tensor":
         r"""
         In-place multiplication self: *= other
         There is no gradient function for in-place operations!
         """
-        self.data = self.data * Tensor.build_ndarray(other)
+        other = Tensor.build_ndarray(other)
+        _tensor(self.device).multiply(self.data, other, out=self.data)
         return self
-    
-    @staticmethod
-    def _matmul(a: "Tensor", b: "Tensor") -> "Tensor":
-        output = a.data @ b.data
-        requires_grad = a.requires_grad or b.requires_grad
-        dependencies: List[Leaf] = []
 
-        if a.requires_grad:
-            def _bkwd(grad: np.ndarray) -> np.ndarray:
-                r"""
-                Backward gradient function for MatMul with respect to a.
-                """
-                if b.ndim > 1:
-                    return grad @ b.data.swapaxes(-1, -2)
-                return np.outer(grad, b.data.T).squeeze()
-    
-            dependencies.append(
-                Leaf(
-                    value=a,
-                    grad_fn=_bkwd
-                )
-            )
-
-        if b.requires_grad:
-            def _bkwd(grad: np.ndarray) -> np.ndarray:
-                r"""
-                Backward gradient function for MatMul with respect to b.
-                """
-                if a.ndim > 1:
-                    return a.data.swapaxes(-1, -2) @ grad
-                return np.outer(a.data.T, grad).squeeze()
-            
-            dependencies.append(
-                Leaf(
-                    value=b,
-                    grad_fn=_bkwd
-                )
-            )
-
-        return Tensor(output, requires_grad, dependencies)
-    
+    @op_gate
     def __matmul__(self, other: Data) -> "Tensor":
-        return Tensor._matmul(self, Tensor.data_gate(other))
-    
+        return OverloadOps.matmul(self, other)
+
+    @op_gate
     def __rmatmul__(self, other: Data) -> "Tensor":
-        return Tensor._matmul(Tensor.data_gate(other), self)
-    
-    def __pow__(self, pow: Scalar) -> "Tensor":
+        return OverloadOps.matmul(other, self)
+
+    def __pow__(self, pow: int) -> "Tensor":
         return self.pow(pow)
-    
+
+    @input_gate
     def __truediv__(self, other: Data) -> "Tensor":
-        other = Tensor.data_gate(other)
         return self * (other**-1)
 
+    @input_gate
     def __rtruediv__(self, other: Data) -> "Tensor":
-        other = Tensor.data_gate(other)
         return other * (self**-1)
-    
+
     def __itruediv__(self, other: Data) -> "Tensor":
         r"""
         In-place division self: /= other
         There is no gradient function for in-place operations!
         """
-        self.data = self.data / Tensor.build_ndarray(other)
+        other = Tensor.build_ndarray(other)
+        _tensor(self.device).true_divide(self.data, other, out=self.data)
         return self
+
+    ###########################################################################
+    ################################# Math Ops ################################
+    ###########################################################################
+
+    @from_op
+    def sum(self, axis: int = None, keepdims: bool = False) -> "Tensor":
+        return Reduce.sum(self, axis, keepdims)
+
+    @from_op
+    def mean(self) -> "Tensor":
+        return Reduce.mean(self)
+
+    @from_op
+    def max(self, axis: int = None, keepdims: bool = False) -> "Tensor":
+        return Reduce.max(self, axis, keepdims)
+
+    @from_op
+    def log(self) -> "Tensor":
+        return MathOps.log(self)
+
+    @from_op
+    def exp(self) -> "Tensor":
+        return MathOps.exp(self)
+
+    @from_op
+    def pow(self, pow: int) -> "Tensor":
+        return MathOps.pow(self, pow)
+
+    @from_op
+    def tanh(self) -> "Tensor":
+        return MathOps.tanh(self)

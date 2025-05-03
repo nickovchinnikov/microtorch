@@ -14,8 +14,19 @@ except ImportError:
 # Scalar types can be int or float
 Scalar = Union[int, float]
 
+
 # Vector types are either NumPy or CuPy arrays
 Vector = Union[np.ndarray, "cp.ndarray"]  # Type hint as string to avoid issues if CuPy is not installed.
+
+
+class DType(Enum):
+    r"""Enum representing supported data types for tensor values."""
+    FLOAT64 = "float64"
+    FLOAT32 = "float32"
+    INT64 = "int64"
+    INT32 = "int32"
+    INT16 = "int16"
+    INT8 = "int8"
 
 
 class Device(str, Enum):
@@ -71,4 +82,35 @@ def _tensor(device: Union[Device, str] = Device.CPU):
     """
     device = _device(device)
     return cp if device == Device.CUDA else np
+
+
+def get_dtype(device: Device, dtype: DType):
+    r"""Returns the correct low-level data type function for a given device.
+
+    Args:
+        device (Device): The computational device (e.g., CPU or GPU).
+        dtype (DType): The desired data type.
+
+    Raises:
+        ValueError: If the dtype is unsupported for the given device.
+
+    Returns:
+        Callable: The function or dtype handler corresponding to the device and dtype.
+    """
+
+    lib = _tensor(device)  # Select the appropriate backend tensor library.
+
+    mapping = {
+        DType.FLOAT64: lib.float64,
+        DType.FLOAT32: lib.float32,
+        DType.INT64: lib.int64,
+        DType.INT32: lib.int32,
+        DType.INT16: lib.int16,
+        DType.INT8: lib.int8,
+    }
+
+    if dtype not in mapping:
+        raise ValueError(f"Unsupported dtype '{dtype}' for device '{device}'")
+
+    return mapping[dtype]
 
