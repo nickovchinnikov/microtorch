@@ -40,7 +40,7 @@ class Reduce:
     @staticmethod
     def mean(tensor: TensorLike, axis: int = None, keepdims: bool = False) -> TProps:
         count = tensor.data.shape[axis] if axis is not None else tensor.size
-        return Reduce.sum(tensor, axis=axis, keepdims=keepdims) / count
+        return tensor.sum(axis=axis, keepdims=keepdims) / count
 
     @staticmethod
     def bkwd_minmax(
@@ -72,7 +72,7 @@ class Reduce:
             dependencies.append(
                 Leaf(
                     value=tensor,
-                    grad_fn=Reduce.bkwd_minmax(output, axis, keepdims)
+                    grad_fn=Reduce.bkwd_minmax(tensor, output, axis, keepdims)
                 )
             )
 
@@ -93,7 +93,7 @@ class Reduce:
             dependencies.append(
                 Leaf(
                     value=tensor,
-                    grad_fn=Reduce.bkwd_minmax(output, axis, keepdims)
+                    grad_fn=Reduce.bkwd_minmax(tensor, output, axis, keepdims)
                 )
             )
 
