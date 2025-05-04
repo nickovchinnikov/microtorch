@@ -15,15 +15,15 @@ from typing import (
 
 from src.tensor.device import Device, DType, Scalar, Vector
 
-Data = Union[Scalar, Vector, list, "TensorLike"]
-Index = Union[int, slice, List[int], Tuple[int, ...], "TensorLike"]
 Self = TypeVar("Self", bound="TensorLike")
-Dims = Tuple[int, ...]
-Axis = Union[int, Dims]
+Data = Union[Scalar, Vector, list, "TensorLike"]
+Index = Union[int, slice, List[int], Tuple[Union[int, slice]], "TensorLike", Vector]
+Shape = Tuple[int, ...]
+Dims = Union[int, Shape]
+Axis = Union[int, Tuple[int, ...]]
 
 
 T = TypeVar("T", bound="TensorLike")
-
 
 @dataclass(frozen=True)
 class Leaf(Generic[T]):
@@ -101,7 +101,7 @@ class TensorLike(Protocol):
 
     # --- Shape Properties ---
     @property
-    def shape(self) -> Tuple[int, ...]: ...
+    def shape(self) -> Shape: ...
 
     @property
     def size(self) -> int: ...

@@ -1,9 +1,8 @@
-from typing import Optional, Tuple, Union
+from typing import Optional
 
 from src.tensor.device import Vector, _tensor
-from src.tensor.types import DependenciesList, Leaf, TensorLike, TProps
+from src.tensor.types import Axis, DependenciesList, Leaf, TensorLike, TProps
 
-Axis = Optional[Union[int, Tuple[int, ...]]]
 
 class Reduce:
     @staticmethod
@@ -47,7 +46,7 @@ class Reduce:
     def bkwd_minmax(
         tensor: TensorLike,
         output: Vector,
-        axis: Optional[Union[int, Tuple[int, ...]]] = None,
+        axis: Optional[Axis],
         keepdims: bool = False
     ) -> Vector:
         tlib = _tensor(tensor.device)
@@ -65,7 +64,7 @@ class Reduce:
         return _bkwd
 
     @staticmethod
-    def max(tensor: TensorLike, axis: Axis = None, keepdims: bool = False) -> TProps:
+    def max(tensor: TensorLike, axis: Optional[Axis], keepdims: bool = False) -> TProps:
         output = _tensor(tensor.device).max(tensor.data, axis=axis, keepdims=keepdims)
         dependencies: DependenciesList = []
 
@@ -86,7 +85,7 @@ class Reduce:
         )
 
     @staticmethod
-    def min(tensor: TensorLike, axis: Axis = None, keepdims: bool = False) -> TProps:
+    def min(tensor: TensorLike, axis: Optional[Axis], keepdims: bool = False) -> TProps:
         output = _tensor(tensor.device).min(tensor.data, axis=axis, keepdims=keepdims)
         dependencies: DependenciesList = []
 

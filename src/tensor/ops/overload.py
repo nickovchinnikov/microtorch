@@ -1,64 +1,12 @@
-from typing import Tuple, Union
-
 from src.tensor.device import Vector, _tensor
-from src.tensor.types import DependenciesList, Leaf, TensorLike, TProps
+from src.tensor.types import DependenciesList, Index, Leaf, TensorLike, TProps
+
+from .base import BaseOps
 
 
 class OverloadOps:
     @staticmethod
-    def bkwd_broadcast(tensor: TensorLike):
-        r"""
-        Backward closure function to sum across broadcasted dimensions.
-    
-        When performing operations between tensors of different shapes, broadcasting is used
-        to align their shapes. This function ensures that the gradients are correctly summed
-        over the broadcasted dimensions during the backward pass.
-        
-        Args:
-            tensor (TensorLike): The tensor involved in the operation, used to handle its shape
-                            during backward gradient computation.
-        Returns:
-            _bkwd (function): A function that computes the gradient, summing over broadcasted
-                            dimensions to match the original tensor's shape.
-        """
-
-        def _bkwd(grad: Vector) -> Vector:
-            # Handle scalar tensor case:
-            # Original tensor was a scalar: sum all gradients
-            if tensor.ndim == 0:
-                return grad.sum()
-
-            # Handle scalar grad case
-            if grad.ndim == 0:
-                return grad
-
-            # Calculate the number of dimensions *added* to the tensor to achieve
-            # the grad shape. This is where broadcasting might have "prepended"
-            # dimensions.
-            ndim_added = max(0, grad.ndim - tensor.ndim)
-
-            if ndim_added > 0:
-                grad = grad.sum(axis=tuple(range(ndim_added)), keepdims=False)
-
-            # Sum over dimensions where tensor was broadcasted (size 1)
-            reduce_axes = tuple(
-                dim for dim in range(tensor.ndim)
-                if tensor.shape[dim] == 1 and grad.shape[dim] > 1
-            )
-
-            if reduce_axes:
-                grad = grad.sum(axis=reduce_axes, keepdims=True)
-
-            # Ensure the final shape matches the tensor shape exactly
-            if grad.shape != tensor.shape:
-                grad = grad.reshape(tensor.shape)
-
-            return grad
-
-        return _bkwd
-
-    @staticmethod
-    def get_item(tensor: TensorLike, index: Union[int, slice, Tuple[Union[int, slice]], Vector]) -> TProps:
+    def get_item(tensor: TensorLike, index: Index) -> TProps:
         output = tensor.data[index]
         dependencies: DependenciesList = []
 
@@ -101,20 +49,18 @@ class OverloadOps:
 
     @staticmethod
     def add(a: TensorLike, b: TensorLike) -> TProps:
-        a, b = OverloadOps.device_gate(a, b)
-
         output = a.data + b.data
         requires_grad = a.requires_grad or b.requires_grad
         dependencies: DependenciesList = []
 
         if a.requires_grad:
             dependencies.append(
-                Leaf(value=a, grad_fn=OverloadOps.bkwd_broadcast(a))
+                Leaf(value=a, grad_fn=BaseOps.bkwd_broadcast(a))
             )
 
         if b.requires_grad:
             dependencies.append(
-                Leaf(value=b, grad_fn=OverloadOps.bkwd_broadcast(b))
+                Leaf(value=b, grad_fn=BaseOps.bkwd_broadcast(b))
             )
 
         return TProps(
@@ -145,7 +91,7 @@ class OverloadOps:
                 grad = grad * b.data
 
                 # Reduce grad to the correct shape
-                return OverloadOps.bkwd_broadcast(a)(grad)
+                return BaseOps.bkwd_broadcast(a)(grad)
 
             return _bkwd
 

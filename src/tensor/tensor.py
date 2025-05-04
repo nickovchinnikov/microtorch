@@ -1,12 +1,15 @@
 import pickle
 from functools import wraps
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, TypeGuard, Union, final
 
 from .device import Device, DType, Vector, _device, _tensor, get_dtype
 from .ops import BaseOps, Elementwise, MathOps, OverloadOps, Reduce
-from .types import Data, DependenciesList, TensorLike, TProps
+from .types import Data, DependenciesList, Dims, Index, Shape, TensorLike, TProps
 
+
+def is_tensorlike(obj: object) -> TypeGuard[TensorLike]:
+    return isinstance(obj, Tensor)
 
 def data_cast(t: Union[Data, "Tensor"]) -> "Tensor":
     if not isinstance(t, Tensor):
@@ -42,7 +45,7 @@ def op_gate(fn):
     return input_gate(from_op(fn))
 
 
-
+@final
 class Tensor(TensorLike):
     # Class attributes to quickly reference dtype enums
     float64 = DType.FLOAT64
@@ -305,8 +308,8 @@ class Tensor(TensorLike):
 
     @staticmethod
     def randn(
-        dims: Tuple[int] | int = (),
-        requires_grad=False,
+        dims: Dims = (),
+        requires_grad = False,
         device: Device = Device.CPU,
     ) -> "Tensor":
         if type(dims) is int:
@@ -317,29 +320,41 @@ class Tensor(TensorLike):
             device=device,
         )
 
-    def view(self, shape: Tuple[int, ...]) -> "Tensor":
-        return Tensor.from_props(BaseOps.view(self, shape))
+    @from_op
+    def view(self, shape: Shape) -> "Tensor":
+        return BaseOps.view(self, shape)
 
-    def transpose(self, axis: Tuple[int, ...] = None) -> "Tensor":
-        return Tensor.from_props(BaseOps.transpose(self, axis))
+    def reshape(self, shape: Shape) -> "Tensor":
+        return self.view(self, shape)
+
+    @from_op
+    def broadcast_to(self, shape: Shape) -> "Tensor":
+        return BaseOps.broadcast_to(self, shape)
+
+    @from_op
+    def transpose(self, axis: Shape = None) -> "Tensor":
+        return BaseOps.transpose(self, axis)
 
     @property
     def T(self) -> "Tensor":
         return self.transpose()
 
+    @from_op
     def squeeze(self, dim: int | Tuple[int] = 0) -> "Tensor":
-        return Tensor.from_props(BaseOps.squeeze(self, dim))
+        return BaseOps.squeeze(self, dim)
 
+    @from_op
     def unsqueeze(self, dim: Tuple[int] = 0) -> "Tensor":
-        return Tensor.from_props(BaseOps.unsqueeze(self, dim))
+        return BaseOps.unsqueeze(self, dim)
 
     ###########################################################################
     ############################## Elementwise Ops ############################
     ###########################################################################
 
     @staticmethod
+    @from_op
     def where(condition: "Tensor", a: "Tensor", b: "Tensor") -> "Tensor":
-        return Tensor.from_props(Elementwise.where(condition, a, b))
+        return Elementwise.where(condition, a, b)
 
     @staticmethod
     @op_gate
@@ -351,8 +366,9 @@ class Tensor(TensorLike):
     def minimum(a: "Tensor", b: "Tensor") -> "Tensor":
         return Elementwise.minimum(a, b)
 
+    @from_op
     def abs(self) -> "Tensor":
-        return Tensor.from_props(Elementwise.abs(self))
+        return Elementwise.abs(self)
 
     def threshold(self, threshold: float, value: float) -> "Tensor":
         return Tensor.where(self > threshold, self, Tensor(value))
@@ -378,10 +394,9 @@ class Tensor(TensorLike):
     ###########################################################################
 
     @data_gate
-    def __getitem__(self, index: Union[int, slice, Tuple[Union[int, slice]], "Tensor", Vector]) -> "Tensor":
-        return Tensor.from_props(
-            OverloadOps.get_item(self, index.data)
-        )
+    @from_op
+    def __getitem__(self, index: Index) -> "Tensor":
+        return OverloadOps.get_item(self, index.data)
 
     ### Comparison Operators ###
     @data_gate
@@ -422,8 +437,9 @@ class Tensor(TensorLike):
         _tensor(self.device).add(self.data, other, out=self.data)
         return self
 
+    @from_op
     def __neg__(self) -> "Tensor":
-        return Tensor.from_props(OverloadOps.neg(self))
+        return OverloadOps.neg(self)
 
     @input_gate
     def __sub__(self, other: Data) -> "Tensor":
