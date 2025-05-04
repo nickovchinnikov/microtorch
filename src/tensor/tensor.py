@@ -151,6 +151,18 @@ class Tensor(TensorLike):
     def grad(self, gr: Vector):
         self._grad = gr
 
+    @property
+    def size(self) -> int:
+        return self.data.size
+
+    @property
+    def shape(self) -> Tuple[int, ...]:
+        return self.data.shape
+    
+    @property
+    def ndim(self) -> int:
+        return self.data.ndim
+
     @staticmethod
     def build_ndarray(
         data: Data,
