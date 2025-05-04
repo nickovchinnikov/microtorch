@@ -113,4 +113,3 @@ def get_dtype(device: Device, dtype: DType):
         raise ValueError(f"Unsupported dtype '{dtype}' for device '{device}'")
 
     return mapping[dtype]
-
