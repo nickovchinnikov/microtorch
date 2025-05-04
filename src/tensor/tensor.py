@@ -85,7 +85,7 @@ class Tensor(TensorLike):
             self.zero_grad()
 
     @classmethod
-    def from_props(cls, prps: TProps) -> "Tensor":
+    def from_props(cls, prps: Union[TProps, TensorLike]) -> "Tensor":
         return cls(*prps.props())
 
     # ----------------------------
@@ -163,6 +163,15 @@ class Tensor(TensorLike):
     def ndim(self) -> int:
         return self.data.ndim
 
+    def props(self) -> Tuple:
+        return (
+            self.data,
+            self.requires_grad,
+            self.dependencies,
+            self.device,
+            self.dtype
+        )
+
     @staticmethod
     def build_ndarray(
         data: Data,
@@ -210,13 +219,14 @@ class Tensor(TensorLike):
         Zero the gradients of all parameters
         """
 
-        if self.grad is None:
-            self.grad = _tensor(self.device).zeros_like(
-                self._data,
-                dtype=get_dtype(self.device, self.dtype),
-            )
-        else:
-            self.grad.fill(0.0)
+        if self.requires_grad:
+            if self.grad is None:
+                self.grad = _tensor(self.device).zeros_like(
+                    self._data,
+                    dtype=get_dtype(self.device, self.dtype),
+                )
+            else:
+                self.grad.fill(0.0)
 
     def release_grad(self) -> None:
         r"""
@@ -389,7 +399,7 @@ class Tensor(TensorLike):
         return BaseOps.view(self, shape)
 
     def reshape(self, shape: Shape) -> "Tensor":
-        return self.view(self, shape)
+        return self.view(shape)
 
     @from_op
     def broadcast_to(self, shape: Shape) -> "Tensor":
