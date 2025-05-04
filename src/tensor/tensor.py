@@ -18,14 +18,14 @@ def data_cast(t: Union[Data, "Tensor"]) -> "Tensor":
 
 def data_gate(fn):
     @wraps(fn)
-    def wrapper(self: Tensor, other: Union[Data, Tensor], *args, **kwargs):
+    def wrapper(self: "Tensor", other: Union[Data, "Tensor"], *args, **kwargs):
         other = data_cast(other)
         return fn(self, other, *args, **kwargs)
     return wrapper
 
 def device_gate(fn):
     @wraps(fn)
-    def wrapper(self: Tensor, other: Tensor, *args, **kwargs):
+    def wrapper(self: "Tensor", other: "Tensor", *args, **kwargs):
         if self.device != other.device:
             raise ValueError(f"Tensors on different devices: {self.device} vs {other.device}")
         return fn(self, other, *args, **kwargs)
@@ -64,10 +64,10 @@ class Tensor(TensorLike):
         dtype: Optional[TensorLike] = None,
     ) -> None:
         self.device = _device(device)
+        self.dtype = dtype or self.float32
 
         # Ensure proper initialization of base classes 
         self.dependencies: DependenciesList = dependencies or []
-        self.dtype = dtype or self.float32
 
         self._data = self.build_ndarray(data, self.dtype, self.device)
 
@@ -75,7 +75,7 @@ class Tensor(TensorLike):
 
         if self.requires_grad:
             self.grad = _tensor(self.device).zeros_like(
-                self._data,
+                self.data,
                 dtype=get_dtype(self.device, self.dtype),
             )
         else:
@@ -88,6 +88,18 @@ class Tensor(TensorLike):
     def from_props(cls, prps: TProps) -> "Tensor":
         return cls(*prps.props())
 
+    # ----------------------------
+    # Core Fields
+    # ----------------------------
+
+    @property
+    def _data(self) -> Vector:
+        return self.__data
+
+    @_data.setter
+    def _data(self, data: Vector):
+        self.__data = data
+
     @property
     def data(self) -> Vector:
         r"""Return the data of the tensor"""
@@ -98,6 +110,46 @@ class Tensor(TensorLike):
         r"""Set the data of the tensor"""
         self._data = self.build_ndarray(new_data, self.dtype, self.device)
         self.zero_grad()
+
+    @property
+    def requires_grad(self) -> bool:
+        return self._requires_grad
+
+    @requires_grad.setter
+    def requires_grad(self, rg: bool):
+        self._requires_grad = rg
+
+    @property
+    def dependencies(self) -> DependenciesList:
+        return self._dependencies
+
+    @dependencies.setter
+    def dependencies(self, deps: DependenciesList):
+        self._dependencies = deps
+
+    @property
+    def device(self) -> Device:
+        return self._device
+
+    @device.setter
+    def device(self, dev: Device):
+        self._device = dev
+
+    @property
+    def dtype(self) -> DType:
+        return self._dtype
+
+    @dtype.setter
+    def dtype(self, dt: DType):
+        self._dtype = dt
+
+    @property
+    def grad(self) -> Optional[Vector]:
+        return self._grad
+
+    @grad.setter
+    def grad(self, gr: Vector):
+        self._grad = gr
 
     @staticmethod
     def build_ndarray(
