@@ -3,6 +3,7 @@ from typing import Any, Literal, Optional, Tuple
 import numpy as np
 
 from src.tensor import Tensor
+from src.tensor.device import Device
 
 InitMethod = Literal["xavier", "he", "normal", "uniform"]
 
@@ -18,6 +19,7 @@ class Parameter(Tensor):
         data: Optional[np.ndarray] = None,
         init_method: InitMethod = "normal",
         gain: float = 1.0,
+        device: Device = Device.CPU,
     ) -> None:
         r"""
         Initialize the parameter.
@@ -33,24 +35,32 @@ class Parameter(Tensor):
         """
 
         if data is None:
-            data = self._initialize(shape, init_method, gain)
+            data = self._initialize(shape, init_method, gain, device)
 
-        super().__init__(data=data, requires_grad=True)
+        super().__init__(data=data, requires_grad=True, device=device)
 
     def _initialize(
-        self, shape: Tuple[int, ...], method: InitMethod | Any, gain: float
+        self, shape: Tuple[int, ...], method: InitMethod | Any, gain: float, device: Device
     ) -> np.ndarray:
         r"""
         Initialize the parameter data.
         """
         if method == "xavier":
-            std = gain * np.sqrt(2.0 / sum(shape))
-            return std * np.random.randn(*shape)
+            std = gain * Tensor(2.0 / sum(shape), device=device).sqrt()
+            return std * Tensor.randn(shape, device=device)
         if method == "he":
-            std = gain * np.sqrt(2.0 / shape[0])
-            return std * np.random.randn(*shape)
+            std = gain * Tensor(2.0 / shape[0], device=device).sqrt()
+            return std * Tensor.randn(shape, device=device)
         if method == "normal":
-            return gain * np.random.randn(*shape)
+            return gain * Tensor.randn(shape, device=device)
         if method == "uniform":
-            return gain * np.random.uniform(-1, 1, size=shape)
+            return gain * Tensor.uniform(-1, 1, shape, device=device)
         raise ValueError(f"Unknown initialization method: {method}")
+
+    def to(self, device: Device) -> "Parameter":
+        t = super().to(device)
+        return Parameter(
+            *t.shape,
+            data=t.data,
+            device=device
+        )

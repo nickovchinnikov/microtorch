@@ -1,7 +1,23 @@
+from functools import wraps
 from typing import Any, Iterator
 
 from src.tensor import Tensor
+from src.tensor.device import Device
 from .param import Parameter
+
+
+def auto_device(forward_fn):
+    @wraps(forward_fn)
+    def wrapper(self: "Module", *args, **kwargs):
+        if not getattr(self, "_device_initialized", False):
+            # Find first Tensor and get device
+            for arg in list(args) + list(kwargs.values()):
+                if isinstance(arg, Tensor):
+                    self.to(arg.device)
+                    self._device_initialized = True
+                    break
+        return forward_fn(self, *args, **kwargs)
+    return wrapper
 
 
 class Module:
@@ -11,7 +27,9 @@ class Module:
 
     def __init__(self) -> None:
         self.train_mode = True
+        self._device_initialized = False
 
+    @auto_device
     def __call__(self, *args: Any) -> Tensor:
         return self.forward(*args)
 
@@ -78,3 +96,11 @@ class Module:
 
         num_parameters = sum(p.data.size for p in self.parameters())
         return num_parameters
+    
+    def to(self, device: Device) -> "Module":
+        for name, attr in self.__dict__.items():
+            if isinstance(attr, Tensor):
+                setattr(self, name, attr.to(device))
+            elif isinstance(attr, Module):
+                attr.to(device)
+        return self
