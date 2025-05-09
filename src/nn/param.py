@@ -15,7 +15,7 @@ class Parameter(Tensor):
     def __init__(
         self,
         *shape: int,
-        data: Optional[np.ndarray],
+        data: Optional[np.ndarray] = None,
         init_method: InitMethod = "normal",
         gain: float = 1.0,
     ) -> None:
