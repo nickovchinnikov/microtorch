@@ -3,7 +3,7 @@ from functools import wraps
 from pathlib import Path
 from typing import Optional, Tuple, TypeGuard, Union, final
 
-from .device import Device, DType, Vector, _device, _tensor, get_dtype
+from .device import Device, DType, Vector, Scalar, _device, _tensor, get_dtype
 from .ops import BaseOps, Elementwise, MathOps, OverloadOps, Reduce
 from .types import Data, DependenciesList, Dims, Index, Shape, TensorLike, TProps
 
@@ -172,6 +172,16 @@ class Tensor(TensorLike):
             self.dtype
         )
 
+    def item(self) -> Scalar:
+        r"""
+        Returns the Python scalar value from a tensor with one element.
+        Raises:
+            ValueError: If the tensor has more than one element.
+        """
+        if self.data.size != 1:
+            raise ValueError(f"Cannot convert tensor with shape {self.shape} to a scalar.")
+        return self.data.item()
+
     @staticmethod
     def build_ndarray(
         data: Data,
@@ -248,13 +258,13 @@ class Tensor(TensorLike):
         if grad.shape != self.shape:
             raise ValueError(f"Grad shape {grad.shape} does not match tensor shape {self.shape}")
 
-        if grad.device != self.device:
-            raise ValueError(f"Grad device {grad.device} does not match tensor device {self.device}")
+        # if grad.device != self.device:
+        #     raise ValueError(f"Grad device {grad.device} does not match tensor device {self.device}")
 
         if self.grad is None:
             self.grad = grad
         else:
-            _tensor(self.device).add(self.grad, grad, out=self.grad)
+            self.grad = _tensor(self.device).add(self.grad, grad)
 
         for dependency in self.dependencies:
             backward_grad = dependency.grad_fn(grad)
@@ -467,10 +477,9 @@ class Tensor(TensorLike):
     ############################## Operator Overload ##########################
     ###########################################################################
 
-    @data_gate
     @from_op
     def __getitem__(self, index: Index) -> "Tensor":
-        return OverloadOps.get_item(self, index.data)
+        return OverloadOps.get_item(self, index)
 
     ### Comparison Operators ###
     @data_gate

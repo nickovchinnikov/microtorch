@@ -47,7 +47,7 @@ class TestTensorCoreOps(unittest.TestCase):
 
         t = Tensor([1.0, 2.0], requires_grad=True)
         wrong_device = Tensor([1.0, 2.0], device=Device.CPU)
-        wrong_device.device = "cuda"  # Fake wrong device
+        wrong_device.device = "fake"  # Fake wrong device
         with self.assertRaises(ValueError):
             t.backward(wrong_device)
 

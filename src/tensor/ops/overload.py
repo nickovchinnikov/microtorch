@@ -1,12 +1,30 @@
+import numpy as np
+
 from src.tensor.device import Vector, _tensor
 from src.tensor.types import DependenciesList, Index, Leaf, TensorLike, TProps
 
 from .base import BaseOps
 
 
+def normalize_index(index: Index):
+    if hasattr(index, "data"):  # TensorLike or wrapper
+        index = index.data
+
+    # Normalize lists to numpy arrays
+    if isinstance(index, list):
+        return np.array(index)
+
+    # Normalize single-item tuple
+    if isinstance(index, tuple) and len(index) == 1:
+        return index[0]
+
+    return index
+
+
 class OverloadOps:
     @staticmethod
     def get_item(tensor: TensorLike, index: Index) -> TProps:
+        index = normalize_index(index)
         output = tensor.data[index]
         dependencies: DependenciesList = []
 
@@ -15,7 +33,7 @@ class OverloadOps:
                 r"""
                 Backward pass for tensor indexing.
                 """
-                full_grad = _tensor(grad.device).zeros_like(tensor.data)
+                full_grad = _tensor(tensor.device).zeros_like(tensor.data)
                 full_grad[index] = grad
                 return full_grad
 

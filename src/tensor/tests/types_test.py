@@ -4,7 +4,7 @@ from unittest.mock import Mock
 import numpy as np
 
 from src.tensor.device import Device, DType
-from src.tensor.tensor import Tensor  # Or your concrete Tensor class
+from src.tensor.tensor import Tensor
 from src.tensor.types import Leaf, TensorLike, TProps
 
 
