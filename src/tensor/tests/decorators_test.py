@@ -24,10 +24,10 @@ class TestDecorators(unittest.TestCase):
 
     def test_data_cast_tensor_passthrough(self):
         t = Tensor([1.0])
-        self.assertIs(data_cast(t), t)
+        self.assertIs(data_cast(t, device=Device.CPU), t)
 
     def test_data_cast_from_list(self):
-        t = data_cast([1.0, 2.0])
+        t = data_cast([1.0, 2.0], device=Device.CPU)
         self.assertIsInstance(t, Tensor)
         np.testing.assert_array_equal(t.data, [1.0, 2.0])
 

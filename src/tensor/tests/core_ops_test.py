@@ -45,9 +45,8 @@ class TestTensorCoreOps(unittest.TestCase):
         with self.assertRaises(ValueError):
             t.backward(np.ones((3,)))  # shape mismatch
 
-        t = Tensor([1.0, 2.0], requires_grad=True)
-        wrong_device = Tensor([1.0, 2.0], device=Device.CPU)
-        wrong_device.device = "fake"  # Fake wrong device
+        t = Tensor([1.0, 2.0], requires_grad=True, device=Device.CPU)
+        wrong_device = Tensor([1.0, 2.0], device=Device.CUDA)
         with self.assertRaises(ValueError):
             t.backward(wrong_device)
 

@@ -233,7 +233,6 @@ class Tensor(TensorLike):
             dtype=new_dtype
         )
 
-
     def zero_grad(self) -> None:
         r"""
         Zero the gradients of all parameters
@@ -263,6 +262,12 @@ class Tensor(TensorLike):
                 grad = self.build_ndarray(1.0, self.dtype, self.device)
             else:
                 raise ValueError(f"Grad must be provided for non-scalar tensors. Tensor shape: {self.shape}")
+
+        # Device check
+        if not isinstance(grad, type(self.data)):
+            raise ValueError((f"Grad device does not match tensor device: {self.device}. "
+                              "Grad must be of same backend type. "
+                              f"Expected {type(self.data)}, got {type(grad)}"))
 
         # Ensure `grad` has the correct shape
         if grad.shape != self.shape:
@@ -360,11 +365,8 @@ class Tensor(TensorLike):
         return tensor
 
     def detach(self) -> "Tensor":
-        r"""
-        Returns a new tensor, detached from the current computational graph.
-        """
         return Tensor(
-            self.data.copy(),
+            self.data,
             device=self.device,
             requires_grad=False,
             dtype=self.dtype,
