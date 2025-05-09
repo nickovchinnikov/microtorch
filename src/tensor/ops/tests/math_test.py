@@ -65,6 +65,25 @@ class TestMathOps(unittest.TestCase):
         expected = a.data ** 2
         np.testing.assert_array_equal(result.data, expected)
 
+    def test_sqrt_forward_backward(self):
+        a = Tensor([[4.0, 9.0]], requires_grad=True)
+        props = MathOps.sqrt(a)
+        result = Tensor.from_props(props)
+
+        expected = np.sqrt(a.data)
+        np.testing.assert_array_almost_equal(result.data, expected)
+
+        result.backward(np.ones_like(result.data))
+        expected_grad = 0.5 / np.sqrt(a.data)
+        np.testing.assert_array_almost_equal(a.grad, expected_grad)
+
+    def test_sqrt_no_grad(self):
+        a = Tensor([[4.0, 9.0]])
+        result = Tensor.from_props(MathOps.sqrt(a))
+        expected = np.sqrt(a.data)
+        np.testing.assert_array_equal(result.data, expected)
+        self.assertEqual(result.dependencies, [])
+
     def test_tanh_forward_backward(self):
         a = Tensor([[0.0, 1.0]], requires_grad=True)
         props = MathOps.tanh(a)

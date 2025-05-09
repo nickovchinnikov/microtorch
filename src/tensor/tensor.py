@@ -11,15 +11,15 @@ from .types import Data, DependenciesList, Dims, Index, Shape, TensorLike, TProp
 def is_tensorlike(obj: object) -> TypeGuard[TensorLike]:
     return isinstance(obj, Tensor)
 
-def data_cast(t: Union[Data, "Tensor"]) -> "Tensor":
+def data_cast(t: Union[Data, "Tensor"], device: Device) -> "Tensor":
     if not isinstance(t, Tensor):
-        t = Tensor(t)
+        t = Tensor(t, device=device)
     return t
 
 def data_gate(fn):
     @wraps(fn)
     def wrapper(self: "Tensor", other: Union[Data, "Tensor"], *args, **kwargs):
-        other = data_cast(other)
+        other = data_cast(other, self.device)
         return fn(self, other, *args, **kwargs)
     return wrapper
 
@@ -171,7 +171,7 @@ class Tensor(TensorLike):
             self.device,
             self.dtype
         )
-
+    
     def item(self) -> Scalar:
         r"""
         Returns the Python scalar value from a tensor with one element.
@@ -192,29 +192,38 @@ class Tensor(TensorLike):
 
         if isinstance(data, Tensor):
             return data.data  # Ensure correct return value
+        
+        tnzr = _tensor(device)
+        
+        # If it's a native vector (e.g., np.ndarray or cp.ndarray), pass through safely
+        if isinstance(data, tnzr.ndarray):
+            if data.dtype != dtype_:
+                return data.astype(dtype_)
+            return data
 
-        return _tensor(device).array(data, dtype=dtype_)
+        # Fallback: safely convert
+        return tnzr.array(data, dtype=dtype_)
 
     def to(self, device: Union[Device, str], dtype: DType = None) -> "Tensor":
         new_device = _device(device)
         new_dtype = dtype or self.dtype
         new_dtype_impl = get_dtype(new_device, new_dtype)
 
-        # If no change is needed, return self
         if new_device == self.device and new_dtype == self.dtype:
             return self
 
-        # Handle device transfer
         if new_device != self.device:
-            new_data = _tensor(new_device).array(
-                self.data, dtype=new_dtype_impl
-            )
+            # Explicitly convert CuPy → NumPy using `.get()`
+            if self.device == Device.CUDA and new_device == Device.CPU:
+                new_data = self.data.get().astype(new_dtype_impl)
+            # NumPy → CuPy should be safe via `cupy.array(...)`
+            elif self.device == Device.CPU and new_device == Device.CUDA:
+                new_data = _tensor(new_device).array(self.data, dtype=new_dtype_impl)
+            else:
+                raise RuntimeError(f"Unsupported device transfer: {self.device} -> {new_device}")
         else:
-            new_data = self.data
-
-        # Handle dtype conversion
-        if new_dtype != self.dtype:
-            new_data = new_data.astype(new_dtype_impl)
+            # Only dtype conversion
+            new_data = self.data.astype(new_dtype_impl)
 
         return Tensor(
             new_data,
@@ -223,6 +232,7 @@ class Tensor(TensorLike):
             device=new_device,
             dtype=new_dtype
         )
+
 
     def zero_grad(self) -> None:
         r"""
@@ -257,9 +267,6 @@ class Tensor(TensorLike):
         # Ensure `grad` has the correct shape
         if grad.shape != self.shape:
             raise ValueError(f"Grad shape {grad.shape} does not match tensor shape {self.shape}")
-
-        # if grad.device != self.device:
-        #     raise ValueError(f"Grad device {grad.device} does not match tensor device {self.device}")
 
         if self.grad is None:
             self.grad = grad
@@ -398,8 +405,28 @@ class Tensor(TensorLike):
     ) -> "Tensor":
         if type(dims) is int:
             dims = (dims,)
+
+        data = _tensor(device).random.randn(*dims)
         return Tensor(
-            _tensor(device).random.randn(*dims),
+            data,
+            requires_grad=requires_grad,
+            device=device,
+        )
+
+    @staticmethod
+    def uniform(
+        low: float,
+        high: float,
+        dims: Dims = (),
+        requires_grad = False,
+        device: Device = Device.CPU,
+    ) -> "Tensor":
+        if type(dims) is int:
+            dims = (dims,)
+
+        data = _tensor(device).random.uniform(low, high, dims)
+        return Tensor(
+            data,
             requires_grad=requires_grad,
             device=device,
         )
@@ -516,7 +543,7 @@ class Tensor(TensorLike):
         return OverloadOps.add(other, self)
 
     def __iadd__(self, other: Data) -> "Tensor":
-        other = Tensor.build_ndarray(other)
+        other = Tensor.build_ndarray(other, device=self.device)
         _tensor(self.device).add(self.data, other, out=self.data)
         return self
 
@@ -537,7 +564,7 @@ class Tensor(TensorLike):
         In-place subtraction self: -= other
         There is no gradient function for in-place operations!
         """
-        other = -Tensor.build_ndarray(other)
+        other = -Tensor.build_ndarray(other, device=self.device)
         _tensor(self.device).add(self.data, other, out=self.data)
         return self
 
@@ -554,7 +581,7 @@ class Tensor(TensorLike):
         In-place multiplication self: *= other
         There is no gradient function for in-place operations!
         """
-        other = Tensor.build_ndarray(other)
+        other = Tensor.build_ndarray(other, device=self.device)
         _tensor(self.device).multiply(self.data, other, out=self.data)
         return self
 
@@ -582,7 +609,7 @@ class Tensor(TensorLike):
         In-place division self: /= other
         There is no gradient function for in-place operations!
         """
-        other = Tensor.build_ndarray(other)
+        other = Tensor.build_ndarray(other, device=self.device)
         _tensor(self.device).true_divide(self.data, other, out=self.data)
         return self
 
@@ -613,6 +640,10 @@ class Tensor(TensorLike):
     @from_op
     def pow(self, pow: int) -> "Tensor":
         return MathOps.pow(self, pow)
+
+    @from_op
+    def sqrt(self) -> "Tensor":
+        return MathOps.pow(self, 0.5)
 
     @from_op
     def tanh(self) -> "Tensor":

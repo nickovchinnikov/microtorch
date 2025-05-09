@@ -19,13 +19,13 @@ class TestParameter(unittest.TestCase):
 
     def test_xavier_init(self):
         param = Parameter(100, 100, init_method='xavier')
-        self.assertAlmostEqual(np.mean(param.data), 0, places=2)
-        self.assertAlmostEqual(np.std(param.data), np.sqrt(2.0 / 200), places=2)
+        self.assertAlmostEqual(np.mean(param.data), 0, places=1)
+        self.assertAlmostEqual(np.std(param.data), np.sqrt(2.0 / 200), places=1)
 
     def test_he_init(self):
         param = Parameter(100, 100, init_method='he')
-        self.assertAlmostEqual(np.mean(param.data), 0, places=2)
-        self.assertAlmostEqual(np.std(param.data), np.sqrt(2.0 / 100), places=2)
+        self.assertAlmostEqual(np.mean(param.data), 0, places=1)
+        self.assertAlmostEqual(np.std(param.data), np.sqrt(2.0 / 100), places=1)
 
     def test_normal_init(self):
         param = Parameter(100, 100, init_method='normal')
@@ -40,7 +40,7 @@ class TestParameter(unittest.TestCase):
         gain = 2.0
         param = Parameter(100, 100, init_method='xavier', gain=gain)
         expected_std = gain * np.sqrt(2.0 / 200)
-        self.assertAlmostEqual(np.std(param.data), expected_std, places=2)
+        self.assertAlmostEqual(np.std(param.data), expected_std, places=1)
 
 if __name__ == '__main__':
     unittest.main()

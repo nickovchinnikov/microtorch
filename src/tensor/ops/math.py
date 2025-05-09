@@ -62,6 +62,10 @@ class MathOps:
         )
 
     @staticmethod
+    def sqrt(tensor: TensorLike) -> TProps:
+        return MathOps.pow(tensor, 0.5)
+
+    @staticmethod
     def tanh(tensor: TensorLike) -> TProps:
         output = _tensor(tensor.device).tanh(tensor._data)
         dependencies: DependenciesList = []
