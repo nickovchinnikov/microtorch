@@ -1,8 +1,8 @@
 # MicroTorch
 
-![MicroTorch Logo](./logo.png)
-
 **MicroTorch** is a lightweight **automatic differentiation library** with **CPU and GPU support**, built on top of `NumPy` and `CuPy`. It enables efficient tensor computations, gradient tracking, and model building using a PyTorch-like API.
+
+![MicroTorch Logo](./logo.png)
 
 ---
 
