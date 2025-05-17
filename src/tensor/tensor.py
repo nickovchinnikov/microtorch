@@ -3,7 +3,8 @@ from functools import wraps
 from pathlib import Path
 from typing import Optional, Tuple, TypeGuard, Union, final
 
-from .device import Device, DType, Vector, Scalar, _device, _tensor, get_dtype
+from .device import Device, _device
+from .backend import get_backend, Backend, DType, get_dtype, Vector, Scalar
 from .ops import BaseOps, Elementwise, MathOps, OverloadOps, Reduce
 from .types import Data, DependenciesList, Dims, Index, Shape, TensorLike, TProps
 
@@ -61,9 +62,10 @@ class Tensor(TensorLike):
         requires_grad: bool = False,
         dependencies: Optional[DependenciesList] = None,
         device: Union[Device, str] = Device.CPU,
-        dtype: Optional[TensorLike] = None,
+        dtype: Optional[DType] = None,
     ) -> None:
         self.device = _device(device)
+        self._backend = get_backend(self.device)
         self.dtype = dtype or self.float32
 
         # Ensure proper initialization of base classes 
@@ -74,7 +76,7 @@ class Tensor(TensorLike):
         self.requires_grad = requires_grad
 
         if self.requires_grad:
-            self.grad = _tensor(self.device).zeros_like(
+            self.grad = self.backend.zeros_like(
                 self.data,
                 dtype=get_dtype(self.device, self.dtype),
             )
@@ -91,14 +93,6 @@ class Tensor(TensorLike):
     # ----------------------------
     # Core Fields
     # ----------------------------
-
-    @property
-    def _data(self) -> Vector:
-        return self.__data
-
-    @_data.setter
-    def _data(self, data: Vector):
-        self.__data = data
 
     @property
     def data(self) -> Vector:
@@ -171,7 +165,16 @@ class Tensor(TensorLike):
             self.device,
             self.dtype
         )
-    
+
+    @property
+    def backend(self) -> Backend:
+        return self._backend
+
+    @backend.setter
+    def backend(self, device: Device):
+        self.device = device
+        self.backend = get_backend(self.device)
+
     def item(self) -> Scalar:
         r"""
         Returns the Python scalar value from a tensor with one element.
@@ -193,21 +196,24 @@ class Tensor(TensorLike):
         if isinstance(data, Tensor):
             return data.data  # Ensure correct return value
         
-        tnzr = _tensor(device)
+        backend = get_backend(device)
         
         # If it's a native vector (e.g., np.ndarray or cp.ndarray), pass through safely
-        if isinstance(data, tnzr.ndarray):
+        if isinstance(data, backend.ndarray):
             if data.dtype != dtype_:
                 return data.astype(dtype_)
             return data
 
         # Fallback: safely convert
-        return tnzr.array(data, dtype=dtype_)
+        return backend.array(data, dtype=dtype_)
 
     def to(self, device: Union[Device, str], dtype: DType = None) -> "Tensor":
         new_device = _device(device)
         new_dtype = dtype or self.dtype
         new_dtype_impl = get_dtype(new_device, new_dtype)
+
+        # Set the backend for the new device
+        self.backend = new_device
 
         if new_device == self.device and new_dtype == self.dtype:
             return self
@@ -218,7 +224,7 @@ class Tensor(TensorLike):
                 new_data = self.data.get().astype(new_dtype_impl)
             # NumPy → CuPy should be safe via `cupy.array(...)`
             elif self.device == Device.CPU and new_device == Device.CUDA:
-                new_data = _tensor(new_device).array(self.data, dtype=new_dtype_impl)
+                new_data = self.backend.array(self.data, dtype=new_dtype_impl)
             else:
                 raise RuntimeError(f"Unsupported device transfer: {self.device} -> {new_device}")
         else:
@@ -240,7 +246,7 @@ class Tensor(TensorLike):
 
         if self.requires_grad:
             if self.grad is None:
-                self.grad = _tensor(self.device).zeros_like(
+                self.grad = self.backend.zeros_like(
                     self._data,
                     dtype=get_dtype(self.device, self.dtype),
                 )
@@ -276,7 +282,7 @@ class Tensor(TensorLike):
         if self.grad is None:
             self.grad = grad
         else:
-            self.grad = _tensor(self.device).add(self.grad, grad)
+            self.grad = self.backend.add(self.grad, grad)
 
         for dependency in self.dependencies:
             backward_grad = dependency.grad_fn(grad)
@@ -288,7 +294,7 @@ class Tensor(TensorLike):
         """
 
         if self.requires_grad and self.grad is not None:
-            self.grad = _tensor(self.device).clip(
+            self.grad = self.backend.clip(
                 self.grad,
                 -clip_value,
                 clip_value
@@ -305,7 +311,7 @@ class Tensor(TensorLike):
         """
 
         if self.requires_grad and self.grad is not None:
-            grad_norm = _tensor(self.device).linalg.norm(self.grad, norm_type)
+            grad_norm = self.backend.linalg.norm(self.grad, norm_type)
             if grad_norm > max_norm:
                 self.grad = self.grad * (max_norm / (grad_norm + eps))
 
@@ -405,10 +411,12 @@ class Tensor(TensorLike):
         requires_grad = False,
         device: Device = Device.CPU,
     ) -> "Tensor":
+        backend = get_backend(device)
+
         if type(dims) is int:
             dims = (dims,)
 
-        data = _tensor(device).random.randn(*dims)
+        data = backend.random_randn(*dims)
         return Tensor(
             data,
             requires_grad=requires_grad,
@@ -423,10 +431,12 @@ class Tensor(TensorLike):
         requires_grad = False,
         device: Device = Device.CPU,
     ) -> "Tensor":
+        backend = get_backend(device)
+
         if type(dims) is int:
             dims = (dims,)
 
-        data = _tensor(device).random.uniform(low, high, dims)
+        data = backend.random_uniform(low, high, dims)
         return Tensor(
             data,
             requires_grad=requires_grad,
@@ -546,7 +556,7 @@ class Tensor(TensorLike):
 
     def __iadd__(self, other: Data) -> "Tensor":
         other = Tensor.build_ndarray(other, device=self.device)
-        _tensor(self.device).add(self.data, other, out=self.data)
+        self.backend.add(self.data, other, out=self.data)
         return self
 
     @from_op
@@ -567,7 +577,7 @@ class Tensor(TensorLike):
         There is no gradient function for in-place operations!
         """
         other = -Tensor.build_ndarray(other, device=self.device)
-        _tensor(self.device).add(self.data, other, out=self.data)
+        self.backend.add(self.data, other, out=self.data)
         return self
 
     @op_gate
@@ -584,7 +594,7 @@ class Tensor(TensorLike):
         There is no gradient function for in-place operations!
         """
         other = Tensor.build_ndarray(other, device=self.device)
-        _tensor(self.device).multiply(self.data, other, out=self.data)
+        self.backend.multiply(self.data, other, out=self.data)
         return self
 
     @op_gate
@@ -612,7 +622,7 @@ class Tensor(TensorLike):
         There is no gradient function for in-place operations!
         """
         other = Tensor.build_ndarray(other, device=self.device)
-        _tensor(self.device).true_divide(self.data, other, out=self.data)
+        self.backend.true_divide(self.data, other, out=self.data)
         return self
 
     ###########################################################################

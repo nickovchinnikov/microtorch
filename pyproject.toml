@@ -1,0 +1,6 @@
+[tool.ruff]
+line-length = 88
+exclude = ["tests", "venv", "__pycache__"]
+lint.select = ["E", "F", "I", "B", "UP", "SIM", "C90"]
+lint.ignore = ["B008", "E741"]
+fix = true
