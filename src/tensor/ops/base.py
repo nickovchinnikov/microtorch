@@ -1,25 +1,44 @@
 import numpy as np
 
-from src.tensor.device import Vector, _tensor
-from src.tensor.types import Axis, DependenciesList, Leaf, Shape, TensorLike, TProps
+from src.tensor.backend import Vector, get_backend
+from src.tensor.backend.types import Axis, Shape
+from src.tensor.types import DependenciesList, Leaf, TensorLike, TProps
 
 
-class BaseOps:
-    @staticmethod
-    def bkwd_broadcast(tensor: TensorLike):
+class Ops:
+    r"""
+    Base class for all operations.
+    """
+
+    def __init__(self, device: str):
+        r"""
+        Initializes the backend for the operation.
+        
+        Args:
+            device (str): The device to use for the operation.
+        """
+        self.backend = get_backend(device)
+
+class BaseOps(Ops):
+    def __init__(self, device: str):
+        super().__init__(device)
+
+    def bkwd_broadcast(self, tensor: TensorLike):
         r"""
         Backward closure function to sum across broadcasted dimensions.
     
-        When performing operations between tensors of different shapes, broadcasting is used
-        to align their shapes. This function ensures that the gradients are correctly summed
-        over the broadcasted dimensions during the backward pass.
+        When performing operations between tensors of different shapes,
+        broadcasting is used
+        to align their shapes. This function ensures that the gradients
+        are correctly summed over the broadcasted dimensions during the
+        backward pass.
         
         Args:
-            tensor (TensorLike): The tensor involved in the operation, used to handle its shape
-                            during backward gradient computation.
+            tensor (TensorLike): The tensor involved in the operation,
+            used to handle its shape during backward gradient computation.
         Returns:
-            _bkwd (function): A function that computes the gradient, summing over broadcasted
-                            dimensions to match the original tensor's shape.
+            _bkwd (function): A function that computes the gradient, summing
+            over broadcasted dimensions to match the original tensor's shape.
         """
 
         def _bkwd(grad: Vector) -> Vector:
@@ -57,18 +76,13 @@ class BaseOps:
 
         return _bkwd
 
-    @staticmethod
-    def broadcast_to(tensor: TensorLike, shape: Shape) -> TProps:
-        tnsr = _tensor(tensor.device)
-        output = tnsr.broadcast_to(tensor.data, shape)
+    def broadcast_to(self, tensor: TensorLike, shape: Shape) -> TProps:
+        output = self.backend.broadcast_to(tensor.data, shape)
         dependencies: DependenciesList = []
 
         if tensor.requires_grad:
             dependencies.append(
-                Leaf(
-                    value=tensor,
-                    grad_fn=BaseOps.bkwd_broadcast(tensor)
-                )
+                Leaf(value=tensor, grad_fn=self.bkwd_broadcast(tensor))
             )
 
         return TProps(
@@ -79,17 +93,13 @@ class BaseOps:
             dtype=tensor.dtype
         )
 
-    @staticmethod
-    def view(tensor: TensorLike, shape: Shape) -> TProps:
-        output: Vector = tensor.data.reshape(shape)
+    def view(self, tensor: TensorLike, shape: Shape) -> TProps:
+        output = self.backend.view(tensor.data, shape)
         dependencies: DependenciesList = []
 
         if tensor.requires_grad:
-            def _bkwd(grad: Vector) -> Vector:
-                return grad.reshape(tensor.shape)
-
             dependencies.append(
-                Leaf(value=tensor, grad_fn=_bkwd)
+                Leaf(value=tensor, grad_fn=self.bkwd_view(tensor))
             )
 
         return TProps(
@@ -99,16 +109,12 @@ class BaseOps:
             device=tensor.device,
             dtype=tensor.dtype
         )
-    
-    @staticmethod
-    def reshape(tensor: TensorLike, shape: Shape) -> TProps:
-        return BaseOps.view(tensor, shape)
 
-    @staticmethod
-    def transpose(tensor: TensorLike, axes: Axis = None) -> TProps:
-        tnsr = _tensor(tensor.device)
+    def reshape(self, tensor: TensorLike, shape: Shape) -> TProps:
+        return self.view(tensor, shape)
 
-        output = tnsr.transpose(tensor._data, axes=axes)
+    def transpose(self, tensor: TensorLike, axes: Axis | None = None) -> TProps:
+        output = self.backend.transpose(tensor.data, axes)
         dependencies: DependenciesList = []
 
         if tensor.requires_grad:
@@ -116,12 +122,12 @@ class BaseOps:
                 # Compute the inverse permutation of axes for the backward function
                 if axes is None:
                     # Implicitly reverses transpose
-                    return tnsr.transpose(grad)  
+                    return self.backend.transpose(grad)
                 else:
                     # Compute the inverse permutation of axes
                     inv_axes = tuple(np.argsort(axes))
                     # Transpose the gradient back using the inverse permutation
-                    return tnsr.transpose(grad, axes=inv_axes)
+                    return self.backend.transpose(grad, axes=inv_axes)
 
             dependencies.append(
                 Leaf(value=tensor, grad_fn=_bkwd)
@@ -135,18 +141,15 @@ class BaseOps:
             dtype=tensor.dtype
         )
 
-    @staticmethod
-    def squeeze(tensor: TensorLike, axis: Axis) -> TProps:
-        tnsr = _tensor(tensor.device)
-
-        output = tnsr.squeeze(tensor._data, axis=axis)
+    def squeeze(self, tensor: TensorLike, axis: Axis | None = None) -> TProps:
+        output = self.backend.squeeze(tensor.data, axis=axis)
         dependencies: DependenciesList = []
 
         if tensor.requires_grad:
             def _bkwd(grad: Vector) -> Vector:
                 if axis is None:
                     return grad.reshape(tensor.shape)
-                return tnsr.expand_dims(grad, axis=axis)
+                return self.backend.expand_dims(grad, axis=axis)
             
             dependencies.append(
                 Leaf(value=tensor, grad_fn=_bkwd)
@@ -160,16 +163,13 @@ class BaseOps:
             dtype=tensor.dtype
         )
 
-    @staticmethod
-    def unsqueeze(tensor: TensorLike, dim: int) -> TProps:
-        tnsr = _tensor(tensor.device)
-
-        output = tnsr.expand_dims(tensor._data, axis=dim)
+    def unsqueeze(self, tensor: TensorLike, dim: int) -> TProps:
+        output = self.backend.expand_dims(tensor.data, axis=dim)
         dependencies: DependenciesList = []
 
         if tensor.requires_grad: 
             def _bkwd(grad: Vector) -> Vector:
-                return tnsr.squeeze(grad, axis=dim)
+                return self.backend.squeeze(grad, axis=dim)
 
             dependencies.append(
                 Leaf(
@@ -185,3 +185,4 @@ class BaseOps:
             device=tensor.device,
             dtype=tensor.dtype
         )
+

@@ -1,11 +1,16 @@
-from src.tensor.device import Vector, _tensor
+from src.tensor.backend import Device
+from src.tensor.backend.types import Vector
 from src.tensor.types import DependenciesList, Leaf, TensorLike, TProps
 
+from .base import Ops
 
-class MathOps:
-    @staticmethod
-    def log(tensor: TensorLike) -> TProps:
-        output = _tensor(tensor.device).log(tensor._data)
+
+class MathOps(Ops):
+    def __init__(self, device: Device):
+        super().__init__(device)
+
+    def log(self, tensor: TensorLike) -> TProps:
+        output = self.backend.log(tensor.data)
         dependencies: DependenciesList = []
 
         def _bkwd(grad: Vector) -> Vector:
@@ -22,9 +27,8 @@ class MathOps:
             dtype=tensor.dtype
         )
 
-    @staticmethod
-    def exp(tensor: TensorLike) -> TProps:
-        output = _tensor(tensor.device).exp(tensor._data)
+    def exp(self, tensor: TensorLike) -> TProps:
+        output = self.backend.exp(tensor.data)
         dependencies: DependenciesList = []
 
         def _bkwd(grad: Vector) -> Vector:
@@ -41,10 +45,9 @@ class MathOps:
             dtype=tensor.dtype
         )
 
-    @staticmethod
-    def pow(tensor: TensorLike, pow: int) -> TProps:
+    def pow(self, tensor: TensorLike, pow: int) -> TProps:
         # Perform power operation
-        output = tensor._data**pow
+        output = self.backend.pow(tensor.data, pow)
         dependencies: DependenciesList = []
 
         def _bkwd(grad: Vector) -> Vector:
@@ -61,13 +64,11 @@ class MathOps:
             dtype=tensor.dtype
         )
 
-    @staticmethod
-    def sqrt(tensor: TensorLike) -> TProps:
-        return MathOps.pow(tensor, 0.5)
-
-    @staticmethod
-    def tanh(tensor: TensorLike) -> TProps:
-        output = _tensor(tensor.device).tanh(tensor._data)
+    def sqrt(self, tensor: TensorLike) -> TProps:
+        return self.pow(tensor, 0.5)
+    
+    def tanh(self, tensor: TensorLike) -> TProps:
+        output = self.backend.tanh(tensor.data)
         dependencies: DependenciesList = []
 
         def _bkwd(grad: Vector) -> Vector:

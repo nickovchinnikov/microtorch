@@ -1,14 +1,17 @@
 from enum import Enum
 
-from src.tensor.device import Device
-
 from .numpy import NumpyBackend
 from .types import Backend
+
+
+class Device(str, Enum):
+    r"""Enumeration for supported devices."""
+    CPU = "cpu"
+    CUDA = "cuda"
 
 _backends: dict[Device, Backend] = {
     Device.CPU: NumpyBackend(),
 }
-
 
 class DType(Enum):
     r"""Enum representing supported data types for tensor values."""
