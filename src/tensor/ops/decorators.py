@@ -17,3 +17,7 @@ def auto_backend(func):
                 raise ValueError("No tensor with a device to resolve backend!")
         return func(*args, backend=backend, **kwargs)
     return wrapper
+
+__all__ = [
+    "auto_backend",
+]

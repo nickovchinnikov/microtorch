@@ -2,8 +2,8 @@ import unittest
 
 import numpy as np
 
-from src.tensor.device import Device
-from src.tensor.ops import BaseOps
+from src.tensor.backend import Device
+from src.tensor.ops.base import BaseOps
 from src.tensor.tensor import Tensor
 
 
