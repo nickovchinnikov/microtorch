@@ -1,8 +1,10 @@
+from collections.abc import Iterator
 from functools import wraps
-from typing import Any, Iterator
+from typing import Any
 
 from src.tensor import Tensor
-from src.tensor.device import Device
+from src.tensor.backend.types import Device
+
 from .param import Parameter
 
 

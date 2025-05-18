@@ -1,9 +1,9 @@
-from typing import Any, Literal, Optional, Tuple
+from typing import Any, Literal
 
 import numpy as np
 
 from src.tensor import Tensor
-from src.tensor.device import Device
+from src.tensor.backend.types import Device
 
 InitMethod = Literal["xavier", "he", "normal", "uniform"]
 
@@ -16,7 +16,7 @@ class Parameter(Tensor):
     def __init__(
         self,
         *shape: int,
-        data: Optional[np.ndarray] = None,
+        data: np.ndarray = None,
         init_method: InitMethod = "normal",
         gain: float = 1.0,
         device: Device = Device.CPU,
@@ -40,7 +40,11 @@ class Parameter(Tensor):
         super().__init__(data=data, requires_grad=True, device=device)
 
     def _initialize(
-        self, shape: Tuple[int, ...], method: InitMethod | Any, gain: float, device: Device
+        self,
+        shape: tuple[int, ...],
+        method: InitMethod | Any,
+        gain: float,
+        device: Device
     ) -> np.ndarray:
         r"""
         Initialize the parameter data.

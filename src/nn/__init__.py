@@ -1,5 +1,5 @@
 from .layer import Linear
-from .loss import L1Loss, MSELoss, BCELoss
+from .loss import BCELoss, L1Loss, MSELoss
 from .module import Module
 from .sequential import Sequential
 

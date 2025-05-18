@@ -1,9 +1,10 @@
-from typing import Callable, Iterator
+from collections.abc import Iterator
+from typing import Callable
 
 from .param import Parameter
 
 
-class Optimizer(object):
+class Optimizer:
     """
     Base class for all optimizers.
     """

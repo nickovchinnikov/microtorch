@@ -5,7 +5,7 @@ import numpy as np
 from src.nn.module import Module
 from src.nn.param import Parameter
 from src.tensor import Tensor
-from src.tensor.device import Device
+from src.tensor.backend.types import Device
 
 
 class TestModule(unittest.TestCase):
@@ -19,7 +19,7 @@ class TestModule(unittest.TestCase):
 
         def forward(self, x):
             return x + self.param1 + self.param2
-    
+
     class NoParamModule(Module):
         def forward(self, x):
             return x

@@ -1,5 +1,5 @@
 import inspect
-from typing import Iterator
+from collections.abc import Iterator
 
 from src.nn.module import Module, Parameter
 from src.tensor.tensor import Tensor
