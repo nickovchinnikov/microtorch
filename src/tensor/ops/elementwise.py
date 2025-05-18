@@ -39,6 +39,7 @@ def minimum(a: TensorLike, b: TensorLike) -> TProps:
 def abs(tensor: TensorLike) -> TProps:
     return where(tensor >= 0, tensor, -tensor)
 
+
 class ElementwiseOps:
     where=staticmethod(where)
     maximum=staticmethod(maximum)

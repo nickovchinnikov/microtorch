@@ -1,14 +1,17 @@
-from src.tensor.backend.types import Vector
+from src.tensor.backend.types import Backend, Vector
 from src.tensor.types import DependenciesList, Leaf, TensorLike, TProps
 
+from .decorators import auto_backend
 
-def log(tensor: TensorLike) -> TProps:
-    output = tensor.data.log()
+
+@auto_backend
+def log(tensor: TensorLike, backend: Backend) -> TProps:
+    output = backend.log(tensor.data)
     dependencies: DependenciesList = []
 
     if tensor.requires_grad:
         def _bkwd(grad: Vector) -> Vector:
-            return grad / tensor._data
+            return grad / tensor.data
         dependencies.append(Leaf(value=tensor, grad_fn=_bkwd))
 
     return TProps(
@@ -19,8 +22,9 @@ def log(tensor: TensorLike) -> TProps:
         dtype=tensor.dtype
     )
 
-def exp(tensor: TensorLike) -> TProps:
-    output = tensor.data.exp()
+@auto_backend
+def exp(tensor: TensorLike, backend: Backend) -> TProps:
+    output = backend.exp(tensor.data)
     dependencies: DependenciesList = []
 
     if tensor.requires_grad:
@@ -56,8 +60,9 @@ def pow(tensor: TensorLike, pow: int) -> TProps:
 def sqrt(tensor: TensorLike) -> TProps:
     return pow(tensor, 0.5)
 
-def tanh(tensor: TensorLike) -> TProps:
-    output = tensor.data.tanh()
+@auto_backend
+def tanh(tensor: TensorLike, backend: Backend) -> TProps:
+    output = backend.tanh(tensor.data)
     dependencies: DependenciesList = []
 
     if tensor.requires_grad:
@@ -72,6 +77,7 @@ def tanh(tensor: TensorLike) -> TProps:
         device=tensor.device,
         dtype=tensor.dtype
     )
+
 
 class MathOps:
     log = staticmethod(log)

@@ -1,27 +1,13 @@
-from enum import Enum
-
 from .numpy import NumpyBackend
-from .types import Backend
+from .types import Backend, Device, DType
 
 
-class Device(str, Enum):
-    r"""Enumeration for supported devices."""
-    CPU = "cpu"
-    CUDA = "cuda"
+def device_cast(device: Device | str) -> Device:
+    return Device(device) if isinstance(device, str) else device
 
 _backends: dict[Device, Backend] = {
     Device.CPU: NumpyBackend(),
 }
-
-class DType(Enum):
-    r"""Enum representing supported data types for tensor values."""
-    FLOAT64 = "float64"
-    FLOAT32 = "float32"
-    INT64 = "int64"
-    INT32 = "int32"
-    INT16 = "int16"
-    INT8 = "int8"
-
 
 def check_cuda() -> bool:
     r"""Check if CuPy is installed and CUDA devices are available.
@@ -66,5 +52,5 @@ def get_dtype(device: Device, dtype: DType):
     """
 
     backend = get_backend(device)
-    dummy = backend.array([0], dtype=dtype.value)
-    return dummy.dtype.type
+    dummy = backend.array([0], dtype=dtype)
+    return dummy.dtype

@@ -1,4 +1,4 @@
-from .ops import BaseOps, Elementwise, MathOps, OverloadOps, Reduce
+from .ops import BaseOps, ElementwiseOps, MathOps, OverloadOps, ReduceOps
 from .tensor import Tensor
 from .types import Leaf, TensorLike, TProps
 
@@ -8,8 +8,8 @@ __all__ = [
     "TProps",
     "Leaf",
     "BaseOps",
-    "Reduce",
-    "Elementwise",
+    "ReduceOps",
+    "ElementwiseOps",
     "MathOps",
     "OverloadOps"
 ]

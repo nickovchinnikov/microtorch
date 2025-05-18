@@ -1,7 +1,8 @@
-from .dispatch import Device, DType, check_cuda, get_backend, get_dtype
-from .types import Backend, Scalar, Vector
+from .dispatch import check_cuda, device_cast, get_backend, get_dtype
+from .types import Backend, Device, DType, Scalar, Vector
 
 __all__ = [
+    "device_cast",
     "get_backend",
     "Device",
     "DType",

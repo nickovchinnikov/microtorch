@@ -3,7 +3,7 @@ from unittest.mock import Mock
 
 import numpy as np
 
-from src.tensor.device import Device, DType
+from src.tensor.backend import Device, DType
 from src.tensor.tensor import Tensor
 from src.tensor.types import Leaf, TensorLike, TProps
 
@@ -23,9 +23,9 @@ class TestTypes(unittest.TestCase):
             requires_grad=True,
             dependencies=[],
             device=Device.CPU,
-            dtype=DType.FLOAT32
+            dtype=DType.float32
         )
-        self.assertEqual(tprops.props(), (data, True, [], Device.CPU, DType.FLOAT32))
+        self.assertEqual(tprops.props(), (data, True, [], Device.CPU, DType.float32))
 
     def test_tensorlike_conformance(self):
         tensor = Tensor([[1, 2]], requires_grad=False)

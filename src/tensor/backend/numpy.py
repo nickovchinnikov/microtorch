@@ -61,14 +61,17 @@ class NumpyLinalg(Linalg):
 
 
 class NumpyBackend(Backend):
-    def array(self, data: Sequence | Vector, dtype: DType | None = None) -> Vector:
-        return np.array(data, dtype=dtype.value if dtype else None)
+    def array(self, data: Sequence | Vector, dtype: np.dtype | None = None) -> Vector:
+        return np.array(data, dtype=dtype if dtype else None)
 
-    def zeros_like(self, a: Vector, dtype: DType | None = None) -> Vector:
-        return np.zeros_like(a, dtype=dtype.value if dtype else None)
+    def fill(self, a: Vector, value: Scalar) -> Vector:
+        return np.full_like(a, value)
 
-    def ones_like(self, a: Vector, dtype: DType | None = None) -> Vector:
-        return np.ones_like(a, dtype=dtype.value if dtype else None)
+    def zeros_like(self, a: Vector, dtype: np.dtype | None = None) -> Vector:
+        return np.zeros_like(a, dtype=dtype if dtype else None)
+
+    def ones_like(self, a: Vector, dtype: np.dtype | None = None) -> Vector:
+        return np.ones_like(a, dtype=dtype if dtype else None)
 
     def copy(self, a: Vector) -> Vector:
         return np.copy(a)
@@ -80,6 +83,9 @@ class NumpyBackend(Backend):
         return np.asarray(a)
 
     def to_numpy(self, a: Vector) -> np.ndarray:
+        return np.asarray(a)
+
+    def get(self, a: Vector) -> np.ndarray:
         return np.asarray(a)
 
     def add(self, a: Vector, b: Scalar | Vector) -> Vector:
@@ -145,11 +151,23 @@ class NumpyBackend(Backend):
     def reshape(self, a: Vector, shape: Shape) -> Vector:
         return np.reshape(a, shape)
 
+    def view(self, a: Vector, shape: Shape) -> Vector:
+        return np.reshape(a, shape)
+
+    def flatten(self, a: Vector) -> Vector:
+        return np.reshape(a, -1)
+
     def transpose(self, a: Vector, axes: Axis | None = None) -> Vector:
         return np.transpose(a, axes)
 
     def broadcast_to(self, a: Vector, shape: Shape) -> Vector:
         return np.broadcast_to(a, shape)
+
+    def outer(self, a: Vector, b: Vector) -> Vector:
+        return np.outer(a, b)
+
+    def swapaxes(self, a: Vector, axis1: int, axis2: int) -> Vector:
+        return np.swapaxes(a, axis1, axis2)
 
     def expand_dims(self, a: Vector, axis: int) -> Vector:
         return np.expand_dims(a, axis)
@@ -165,6 +183,9 @@ class NumpyBackend(Backend):
 
     def random_normal(self, mean: Scalar, std: Scalar, shape: Shape) -> Vector:
         return np.random.normal(mean, std, shape)
+
+    def random_randn(self, shape: Shape) -> Vector:
+        return np.random.randn(*shape)
 
     @property
     def linalg(self) -> Linalg:

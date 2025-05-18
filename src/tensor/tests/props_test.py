@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from src.tensor.device import Device, DType
+from src.tensor.backend import Device, DType
 from src.tensor.tensor import Tensor
 
 
@@ -10,7 +10,7 @@ class TestTensorCoreFields(unittest.TestCase):
     def test_tensor_init_defaults(self):
         t = Tensor([1, 2, 3])
         self.assertEqual(t.device, Device.CPU)
-        self.assertEqual(t.dtype, DType.FLOAT32)
+        self.assertEqual(t.dtype, DType.float32)
         self.assertFalse(t.requires_grad)
         self.assertIsNone(t.grad)
         np.testing.assert_array_equal(t.data, np.array([1, 2, 3], dtype=np.float32))
@@ -34,10 +34,10 @@ class TestTensorCoreFields(unittest.TestCase):
         t.grad = np.array([1.0, 1.0, 1.0])
         np.testing.assert_array_equal(t.grad, [1.0, 1.0, 1.0])
         t.device = Device.CPU
-        t.dtype = DType.FLOAT64
+        t.dtype = DType.float64
         t.dependencies = []
         self.assertEqual(t.device, Device.CPU)
-        self.assertEqual(t.dtype, DType.FLOAT64)
+        self.assertEqual(t.dtype, DType.float64)
         self.assertEqual(t.dependencies, [])
 
     def test_shape_size_ndim_properties(self):
@@ -54,15 +54,15 @@ class TestTensorCoreFields(unittest.TestCase):
         self.assertIn("dtype=", rep)
 
     def test_to_device_dtype_conversion(self):
-        t = Tensor([1.0, 2.0], dtype=DType.FLOAT32)
-        t2 = t.to(Device.CPU, dtype=DType.FLOAT64)
+        t = Tensor([1.0, 2.0], dtype=DType.float32)
+        t2 = t.to(Device.CPU, dtype=DType.float64)
         self.assertIsInstance(t2, Tensor)
-        self.assertEqual(t2.dtype, DType.FLOAT64)
+        self.assertEqual(t2.dtype, DType.float64)
         np.testing.assert_array_equal(t2.data, t.data.astype(np.float64))
 
     def test_to_returns_self_when_same(self):
-        t = Tensor([1.0], device=Device.CPU, dtype=DType.FLOAT32)
-        t2 = t.to(Device.CPU, dtype=DType.FLOAT32)
+        t = Tensor([1.0], device=Device.CPU, dtype=DType.float32)
+        t2 = t.to(Device.CPU, dtype=DType.float32)
         self.assertIs(t, t2)
 
     def test_build_ndarray_with_tensor_input(self):

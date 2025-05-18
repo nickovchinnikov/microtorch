@@ -66,10 +66,11 @@ def broadcast_to(
         dtype=tensor.dtype
     )
 
+@auto_backend
 def view(
-    tensor: TensorLike, shape: Shape
+    tensor: TensorLike, shape: Shape, backend: Backend
 ) -> TProps:
-    output = tensor.data.view(shape)
+    output = backend.view(tensor.data, shape)
     dependencies: DependenciesList = []
 
     if tensor.requires_grad:
@@ -147,10 +148,11 @@ def squeeze(
         dtype=tensor.dtype
     )
 
+@auto_backend
 def unsqueeze(
-    tensor: TensorLike, dim: int
+    tensor: TensorLike, dim: int, backend: Backend
 ) -> TProps:
-    output = tensor.data.expand_dims(dim)
+    output = backend.expand_dims(tensor.data, dim)
     dependencies: DependenciesList = []
 
     if tensor.requires_grad:

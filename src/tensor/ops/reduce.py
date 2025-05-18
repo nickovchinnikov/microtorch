@@ -28,7 +28,7 @@ def sum(
 
             grad_expanded = (
                 grad if keepdims
-                else grad.expand_dims(axis=axis)
+                else backend.expand_dims(grad, axis=axis)
             )
             return full_grad * grad_expanded
 
@@ -48,13 +48,15 @@ def mean(
     keepdims: bool = False
 ) -> TProps:
     count = tensor.data.shape[axis] if axis is not None else tensor.size
-    return sum(tensor, axis=axis, keepdims=keepdims) / count
+    return tensor.sum(axis=axis, keepdims=keepdims) / count
 
+@auto_backend
 def bkwd_minmax(
     tensor: TensorLike,
     output: Vector,
     axis: Axis | None,
-    keepdims: bool = False
+    keepdims: bool = False,
+    backend: Backend = None
 ) -> Callable[[Vector], Vector]:
     def _bkwd(grad: Vector) -> Vector:
         mask = tensor.data == output
@@ -64,7 +66,7 @@ def bkwd_minmax(
 
         grad_expanded = (
             grad if keepdims or axis is None
-            else grad.expand_dims(axis=axis)
+            else backend.expand_dims(grad, axis=axis)
         )
         return mask * (grad_expanded / count)
 
@@ -117,6 +119,7 @@ def min(
         tensor.device,
         tensor.dtype
     )
+
 
 class ReduceOps:
     sum=staticmethod(sum)

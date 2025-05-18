@@ -5,19 +5,19 @@ import unittest
 
 import numpy as np
 
-from src.tensor.device import Device, DType
+from src.tensor.backend import Device, DType
 from src.tensor.tensor import Tensor
 
 
 class TestTensorCoreOps(unittest.TestCase):
     def test_to_returns_self(self):
-        t = Tensor([1.0, 2.0], dtype=DType.FLOAT32)
-        self.assertIs(t.to(Device.CPU, DType.FLOAT32), t)
+        t = Tensor([1.0, 2.0], dtype=DType.float32)
+        self.assertIs(t.to(Device.CPU, DType.float32), t)
 
     def test_to_change_dtype(self):
-        t = Tensor([1.0], dtype=DType.FLOAT32)
-        t2 = t.to(Device.CPU, DType.FLOAT64)
-        self.assertEqual(t2.dtype, DType.FLOAT64)
+        t = Tensor([1.0], dtype=DType.float32)
+        t2 = t.to(Device.CPU, DType.float64)
+        self.assertEqual(t2.dtype, DType.float64)
         self.assertNotEqual(t2.data.dtype, t.data.dtype)
 
     def test_zero_and_release_grad(self):

@@ -56,14 +56,17 @@ class CuPyLinalg(Linalg):
 
 
 class CuPyBackend(Backend):
-    def array(self, data: Sequence | Vector, dtype: DType | None = None) -> Vector:
-        return cp.array(data, dtype=dtype.value if dtype else None)
+    def array(self, data: Sequence | Vector, dtype: cp.dtype | None = None) -> Vector:
+        return cp.array(data, dtype=dtype if dtype else None)
 
-    def zeros_like(self, a: Vector, dtype: DType | None = None) -> Vector:
-        return cp.zeros_like(a, dtype=dtype.value if dtype else None)
+    def fill(self, a: Vector, value: Scalar) -> Vector:
+        return cp.full_like(a, value)
 
-    def ones_like(self, a: Vector, dtype: DType | None = None) -> Vector:
-        return cp.ones_like(a, dtype=dtype.value if dtype else None)
+    def zeros_like(self, a: Vector, dtype: cp.dtype | None = None) -> Vector:
+        return cp.zeros_like(a, dtype=dtype if dtype else None)
+
+    def ones_like(self, a: Vector, dtype: cp.dtype | None = None) -> Vector:
+        return cp.ones_like(a, dtype=dtype if dtype else None)
 
     def copy(self, a: Vector) -> Vector:
         return cp.copy(a)
@@ -75,6 +78,9 @@ class CuPyBackend(Backend):
         return cp.asarray(a)
 
     def to_numpy(self, a: Vector) -> np.ndarray:
+        return cp.asnumpy(a)
+
+    def get(self, a: Vector) -> np.ndarray:
         return cp.asnumpy(a)
 
     def add(self, a: Vector, b: Scalar | Vector) -> Vector:
@@ -140,11 +146,23 @@ class CuPyBackend(Backend):
     def reshape(self, a: Vector, shape: Shape) -> Vector:
         return cp.reshape(a, shape)
 
+    def view(self, a: Vector, shape: Shape) -> Vector:
+        return cp.reshape(a, shape)
+
+    def flatten(self, a: Vector) -> Vector:
+        return cp.reshape(a, -1)
+
     def transpose(self, a: Vector, axes: Axis | None = None) -> Vector:
         return cp.transpose(a, axes)
 
     def broadcast_to(self, a: Vector, shape: Shape) -> Vector:
         return cp.broadcast_to(a, shape)
+
+    def outer(self, a: Vector, b: Vector) -> Vector:
+        return cp.outer(a, b)
+
+    def swapaxes(self, a: Vector, axis1: int, axis2: int) -> Vector:
+        return cp.swapaxes(a, axis1, axis2)
 
     def expand_dims(self, a: Vector, axis: int) -> Vector:
         return cp.expand_dims(a, axis)
@@ -160,6 +178,9 @@ class CuPyBackend(Backend):
 
     def random_normal(self, mean: Scalar, std: Scalar, shape: Shape) -> Vector:
         return cp.random.normal(mean, std, shape)
+
+    def random_randn(self, shape: Shape) -> Vector:
+        return cp.random.randn(*shape)
 
     @property
     def linalg(self) -> Linalg:

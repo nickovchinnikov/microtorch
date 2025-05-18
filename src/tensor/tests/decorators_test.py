@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from src.tensor.device import Device, DType
+from src.tensor.backend import Device, DType
 from src.tensor.tensor import (
     Tensor,
     data_cast,
@@ -78,7 +78,7 @@ class TestDecorators(unittest.TestCase):
                 requires_grad=False,
                 dependencies=[],
                 device=Device.CPU,
-                dtype=DType.FLOAT32,
+                dtype=DType.float32,
             )
 
         t = make_tensor()

@@ -79,42 +79,19 @@ class TensorLike(Protocol):
     int8: ClassVar[DType]
 
     # --- Core Properties ---
-    
-    @property
-    def _data(self) -> Vector: ...
 
-    @_data.setter
-    def _data(self, data: Vector): ...
-
-    @property
-    def requires_grad(self) -> bool: ...
-
-    @requires_grad.setter
-    def requires_grad(self, rg: bool): ...
-
-    @property
-    def dependencies(self) -> list[DependenciesList]: ...
-
-    @dependencies.setter
-    def dependencies(self, deps: list[DependenciesList]): ...
-
-    @property
-    def device(self) -> Device: ...
-
-    @device.setter
-    def device(self, device: Device): ...
+    data: Vector
+    requires_grad: bool
+    dependencies: DependenciesList
+    device: Device
+    grad: Vector
+    dtype: DType
 
     @property
     def dtype(self) -> DType: ...
 
     @dtype.setter
     def dtype(self, dt: DType): ...
-
-    @property
-    def grad(self) -> Vector | None: ...
-
-    @grad.setter
-    def grad(self, gr: Vector): ...
 
     # --- Shape Properties ---
     @property
@@ -125,12 +102,6 @@ class TensorLike(Protocol):
 
     @property
     def ndim(self) -> int: ...
-
-    @property
-    def data(self) -> Vector: ...
-
-    @data.setter
-    def data(self, data: Data): ...
 
     def props(self) -> tuple: ...
     
@@ -154,8 +125,8 @@ class TensorLike(Protocol):
     @staticmethod
     def randn(
         dims: Axis = (),
-        requires_grad = False,
-        device: Device = Device.CPU,
+        requires_grad: bool = False,
+        device: Device | str = Device.CPU,
     ) -> Self: ...
 
     # --- Unary / Structure Methods ---
