@@ -3,3 +3,4 @@ __pycache__
 .coverage
 .virtual_documents
 .ipynb_checkpoints
+*,cover

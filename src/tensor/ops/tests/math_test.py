@@ -102,7 +102,3 @@ class TestMathOps(unittest.TestCase):
         expected = np.tanh(a.data)
         np.testing.assert_array_equal(result.data, expected)
         self.assertEqual(result.dependencies, [])
-
-
-if __name__ == "__main__":
-    unittest.main()

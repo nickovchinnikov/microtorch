@@ -124,8 +124,9 @@ def transpose(
         dtype=tensor.dtype
     )
 
+@auto_backend
 def squeeze(
-    tensor: TensorLike, axis: Axis | None = None
+    tensor: TensorLike, axis: Axis | None = None, backend: Backend = None
 ) -> TProps:
     output = tensor.data.squeeze(axis)
     dependencies: DependenciesList = []
@@ -134,7 +135,7 @@ def squeeze(
         def _bkwd(grad: Vector) -> Vector:
             if axis is None:
                 return grad.reshape(tensor.shape)
-            return grad.expand_dims(axis=axis)
+            return backend.expand_dims(grad, axis)
 
         dependencies.append(
             Leaf(value=tensor, grad_fn=_bkwd)

@@ -31,6 +31,16 @@ class TestElementwise(unittest.TestCase):
         self.assertFalse(out.requires_grad)
         self.assertEqual(out.dependencies, [])
 
+    def test_where_backward_paths(self):
+        a = Tensor([1.0, 2.0], requires_grad=True)
+        b = Tensor([10.0, 20.0], requires_grad=True)
+        c = Tensor([True, False])
+        out = Tensor.from_props(ElementwiseOps.where(c, a, b))
+        out.backward(np.array([1.0, 1.0]))
+
+        np.testing.assert_array_equal(a.grad, [1.0, 0.0])
+        np.testing.assert_array_equal(b.grad, [0.0, 1.0])
+
     def test_maximum(self):
         a = Tensor([[1.0, 5.0]])
         b = Tensor([[2.0, 3.0]])

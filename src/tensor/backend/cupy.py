@@ -26,15 +26,11 @@ class CuPyLinalg(Linalg):
         self,
         x: Vector,
         full_matrices: bool = True,
-        compute_uv: bool = True,
-        hermitian: bool = False
+        compute_uv: bool = True
     ) -> tuple[Vector, ...]:
         return cp.linalg.svd(
-            x, full_matrices=full_matrices, compute_uv=compute_uv, hermitian=hermitian
+            x, full_matrices=full_matrices, compute_uv=compute_uv
         )
-
-    def eig(self, x: Vector) -> tuple[Vector, Vector]:
-        return cp.linalg.eig(x)
 
     def eigh(self, x: Vector, UPLO: str = "L") -> tuple[Vector, Vector]:
         return cp.linalg.eigh(x, UPLO=UPLO)
@@ -47,7 +43,7 @@ class CuPyLinalg(Linalg):
 
     def lstsq(
         self, a: Vector, b: Vector, rcond: float | None = None
-    ) -> tuple[Vector, Vector, int, Vector]:
+    ) -> tuple[Vector, Vector | list, Vector | int, Vector]:
         x, residuals, rank, s = cp.linalg.lstsq(a, b, rcond=rcond)
         return x, residuals, rank, s
 
@@ -71,8 +67,8 @@ class CuPyBackend(Backend):
     def copy(self, a: Vector) -> Vector:
         return cp.copy(a)
 
-    def astype(self, a: Vector, dtype: DType) -> Vector:
-        return a.astype(dtype.value)
+    def astype(self, a: Vector, dtype: cp.dtype) -> Vector:
+        return a.astype(dtype)
 
     def from_numpy(self, a: np.ndarray) -> Vector:
         return cp.asarray(a)

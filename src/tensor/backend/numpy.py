@@ -25,18 +25,13 @@ class NumpyLinalg(Linalg):
         self,
         x: Vector,
         full_matrices: bool = True,
-        compute_uv: bool = True,
-        hermitian: bool = False
+        compute_uv: bool = True
     ) -> tuple[Vector, ...]:
         return np.linalg.svd(
             x,
             full_matrices=full_matrices,
-            compute_uv=compute_uv,
-            hermitian=hermitian
+            compute_uv=compute_uv
         )
-
-    def eig(self, x: Vector) -> tuple[Vector, Vector]:
-        return np.linalg.eig(x)
 
     def eigh(self, x: Vector, UPLO: str = "L") -> tuple[Vector, Vector]:
         return np.linalg.eigh(x, UPLO=UPLO)
@@ -76,8 +71,8 @@ class NumpyBackend(Backend):
     def copy(self, a: Vector) -> Vector:
         return np.copy(a)
 
-    def astype(self, a: Vector, dtype: DType) -> Vector:
-        return a.astype(dtype.value)
+    def astype(self, a: Vector, dtype: np.dtype) -> Vector:
+        return a.astype(dtype)
 
     def from_numpy(self, a: np.ndarray) -> Vector:
         return np.asarray(a)
@@ -85,6 +80,7 @@ class NumpyBackend(Backend):
     def to_numpy(self, a: Vector) -> np.ndarray:
         return np.asarray(a)
 
+    # For the backward compatibility with the Cupy backend
     def get(self, a: Vector) -> np.ndarray:
         return np.asarray(a)
 
